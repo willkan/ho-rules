@@ -84,14 +84,18 @@ ho-rules version
 ho-rules status
 ```
 
-**Why `ho-rules` is not immediate after curl:** the installer only creates a symlink under `~/dev/bin` or `~/.local/bin`. `curl | bash` cannot change your current interactive shell’s `PATH`. Fix for this shell:
+**Why `ho-rules` is not immediate after curl:** the installer only creates a symlink under `~/dev/bin` or `~/.local/bin`. `curl | bash` cannot change your current interactive shell’s `PATH`.
+
+If that directory is not on `PATH`, install **prompts** you to append one line to `~/.zshrc` or `~/.bash_profile` (detected from `$SHELL`). Confirm with `Y`. Then open a new terminal, or `source` that file.
+
+This shell only (no rc change yet):
 
 ```bash
 export PATH="$HOME/dev/bin:$HOME/.local/bin:$PATH" && hash -r
 ho-rules help
 ```
 
-Install also appends a small PATH snippet to your shell rc when needed; open a new terminal afterward.
+Non-interactive auto-confirm: `ho-rules install --cli --force -y`
 
 ---
 

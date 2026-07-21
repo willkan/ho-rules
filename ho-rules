@@ -187,6 +187,7 @@ Options:
   --force               Backup and replace existing targets
   --copy                Copy instead of symlink (not recommended)
   --cli                 Install ho-rules into PATH (~/dev/bin or ~/.local/bin)
+  -y, --yes             Auto-confirm shell rc PATH write (non-interactive)
   --dry-run             Print actions only
   -h, --help            Show help
 EOF
@@ -359,64 +360,94 @@ path_contains_dir() {
   esac
 }
 
-# Idempotently ensure bin_dir is exported in common shell rc files.
-# curl|bash cannot change the parent interactive shell; rc fixes new terminals.
+# Primary rc to edit for PATH (zsh -> .zshrc, bash -> .bash_profile).
+primary_shell_rc() {
+  case "${SHELL:-}" in
+    */zsh)
+      printf '%s\n' "${HOME}/.zshrc"
+      ;;
+    */bash)
+      # macOS login bash reads .bash_profile; prefer it when present or as default create target.
+      if [[ -f "${HOME}/.bash_profile" || ! -f "${HOME}/.bashrc" ]]; then
+        printf '%s\n' "${HOME}/.bash_profile"
+      else
+        printf '%s\n' "${HOME}/.bashrc"
+      fi
+      ;;
+    *)
+      if [[ -f "${HOME}/.zshrc" ]]; then
+        printf '%s\n' "${HOME}/.zshrc"
+      elif [[ -f "${HOME}/.bash_profile" ]]; then
+        printf '%s\n' "${HOME}/.bash_profile"
+      elif [[ -f "${HOME}/.bashrc" ]]; then
+        printf '%s\n' "${HOME}/.bashrc"
+      else
+        printf '%s\n' "${HOME}/.zshrc"
+      fi
+      ;;
+  esac
+}
+
+prompt_yes_no() {
+  # $1 = prompt text (default Yes). Reads from /dev/tty so curl|bash can still ask.
+  local prompt="$1"
+  local ans=""
+  if [[ "${YES:-0}" -eq 1 ]]; then
+    return 0
+  fi
+  if [[ ! -r /dev/tty ]]; then
+    return 1
+  fi
+  printf '%s' "$prompt" > /dev/tty
+  # shellcheck disable=SC2162
+  read -r ans < /dev/tty || return 1
+  case "${ans:-Y}" in
+    ""|Y|y|yes|YES) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Ask before writing PATH into shell rc. Idempotent via marker comment.
 ensure_bin_dir_on_path_rc() {
   local bin_dir="$1"
   local marker="# ho-rules PATH"
-  local block
-  block="$(printf '\n%s\nexport PATH="%s:$PATH"\n' "$marker" "$bin_dir")"
+  local rc line block
 
-  local rc written=0
-  local candidates=()
-  case "${SHELL:-}" in
-    */zsh)
-      candidates+=("${HOME}/.zshrc")
-      # Login shells on macOS often only read .zprofile
-      candidates+=("${HOME}/.zprofile")
-      ;;
-    */bash)
-      candidates+=("${HOME}/.bashrc")
-      candidates+=("${HOME}/.bash_profile")
-      ;;
-    *)
-      candidates+=("${HOME}/.zshrc" "${HOME}/.zprofile" "${HOME}/.bashrc" "${HOME}/.bash_profile")
-      ;;
-  esac
+  rc="$(primary_shell_rc)"
+  line="export PATH=\"${bin_dir}:\$PATH\""
+  block="$(printf '\n%s\n%s\n' "$marker" "$line")"
 
-  for rc in "${candidates[@]}"; do
-    if [[ -f "$rc" ]] && grep -F "$marker" "$rc" >/dev/null 2>&1; then
-      written=1
-      continue
-    fi
-    # Only create/update the primary rc for the current shell family if missing.
-    if [[ ! -f "$rc" ]]; then
-      case "$rc" in
-        "${HOME}/.zshrc"|"${HOME}/.bashrc") ;;
-        *) continue ;;
-      esac
-    fi
-    if [[ "${DRY_RUN:-0}" -eq 1 ]]; then
-      log "  DRY-RUN: append PATH to $rc"
-      written=1
-      continue
-    fi
-    if [[ ! -f "$rc" ]]; then
-      printf '%s\n' "$block" >"$rc"
-    else
-      printf '%s\n' "$block" >>"$rc"
-    fi
-    log "  PATH snippet appended: $rc"
-    written=1
-  done
-
-  if [[ "$written" -eq 0 && "${DRY_RUN:-0}" -eq 0 ]]; then
-    # Fallback: create ~/.zshrc or ~/.bashrc
-    local fallback="${HOME}/.zshrc"
-    [[ "${SHELL:-}" == */bash ]] && fallback="${HOME}/.bashrc"
-    printf '%s\n' "$block" >"$fallback"
-    log "  PATH snippet written: $fallback"
+  if [[ -f "$rc" ]] && grep -F "$marker" "$rc" >/dev/null 2>&1; then
+    log "  PATH already configured in $rc"
+    return 0
   fi
+
+  log ""
+  log "  ${bin_dir} is not on your PATH."
+  log "  To make \`ho-rules\` available in new terminals, add to ${rc}:"
+  log ""
+  log "    ${line}"
+  log ""
+
+  if [[ "${DRY_RUN:-0}" -eq 1 ]]; then
+    log "  DRY-RUN: would append the above to $rc after confirmation"
+    return 0
+  fi
+
+  if ! prompt_yes_no "  Write this to ${rc}? [Y/n] "; then
+    log "  skipped shell rc update"
+    log "  You can add it later, or run for this shell only:"
+    log "    export PATH=\"${bin_dir}:\$PATH\" && hash -r"
+    return 0
+  fi
+
+  if [[ ! -f "$rc" ]]; then
+    printf '%s\n' "$block" >"$rc"
+  else
+    printf '%s\n' "$block" >>"$rc"
+  fi
+  log "  updated: $rc"
+  log "  open a new terminal, or: source $rc"
 }
 
 print_cli_usage_hints() {
@@ -428,9 +459,8 @@ print_cli_usage_hints() {
   if path_contains_dir "$bin_dir"; then
     log "    ho-rules help"
   else
-    log "  Or add to THIS shell, then retry:"
+    log "  This shell only (until you open a new terminal):"
     log "    export PATH=\"${bin_dir}:\$PATH\" && hash -r && ho-rules help"
-    log "  (curl|bash cannot change your interactive shell PATH; open a new terminal after rc update.)"
   fi
 }
 
@@ -602,6 +632,7 @@ cmd_install() {
   MODE="symlink"
   FORCE=0
   DRY_RUN=0
+  YES=0
   local with_cli=0
   local passthrough=()
 
@@ -611,6 +642,7 @@ cmd_install() {
       --copy) MODE="copy"; shift ;;
       --symlink) MODE="symlink"; shift ;;
       --cli) with_cli=1; shift ;;
+      -y|--yes) YES=1; shift ;;
       --dry-run) DRY_RUN=1; shift ;;
       -h|--help) usage_install; return 0 ;;
       --all|-a|--agent|--agent=*|[!-]*)

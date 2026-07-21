@@ -84,14 +84,18 @@ ho-rules version
 ho-rules status
 ```
 
-**为什么 curl 装完不能立刻敲 `ho-rules`：** 安装只是在 `~/dev/bin` 或 `~/.local/bin` 建软链；`curl | bash` 无法改你当前交互 shell 的 `PATH`。当前 shell 可先：
+**为什么 curl 装完不能立刻敲 `ho-rules`：** 安装只是在 `~/dev/bin` 或 `~/.local/bin` 建软链；`curl | bash` 无法改你当前交互 shell 的 `PATH`。
+
+若该目录不在 `PATH` 上，安装会**主动提示**是否写入 `~/.zshrc` 或 `~/.bash_profile`（按 `$SHELL` 选择）。确认 `Y` 后写入一行 `export PATH=...`。新开终端或 `source` 该文件即可。
+
+当前 shell 临时可用（不改 rc）：
 
 ```bash
 export PATH="$HOME/dev/bin:$HOME/.local/bin:$PATH" && hash -r
 ho-rules help
 ```
 
-若检测到目录不在 PATH 上，安装会往 shell rc 写入片段；新开终端后即可直接用。
+非交互自动确认：`ho-rules install --cli --force -y`
 
 ---
 
