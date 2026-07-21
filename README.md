@@ -8,21 +8,98 @@
 ho-rules <command>
 ```
 
-## 快速开始
+## 一键安装（curl）
+
+默认只安装 **`ho-rules` CLI 入口**（软链到 `~/dev/bin` 或 `~/.local/bin`），并把仓库放到 `~/dev/ho-rules`。
+
+### 公开仓库
 
 ```bash
-git clone <your-github-url> ~/dev/ho-rules
+curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash
+```
+
+同时挂上全部 agent 全局规则路径：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash -s -- --all
+```
+
+只挂部分 agent：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash -s -- -a codex,claude,grok
+```
+
+### 私有仓库
+
+`raw.githubusercontent.com` 需要带 token，或用 `gh` 拉脚本：
+
+```bash
+# 推荐：已登录 gh
+gh api repos/willkan/ho-rules/contents/bootstrap.sh --jq .content \
+  | base64 --decode | bash
+
+# 同时装全部 agent 链接
+gh api repos/willkan/ho-rules/contents/bootstrap.sh --jq .content \
+  | base64 --decode | bash -s -- --all
+
+# 或 curl + token
+curl -fsSL \
+  -H "Authorization: Bearer $GITHUB_TOKEN" \
+  -H "Accept: application/vnd.github.raw" \
+  https://api.github.com/repos/willkan/ho-rules/contents/bootstrap.sh \
+  | bash -s -- --all
+```
+
+clone 仍走 `git`（SSH 或已配置的 HTTPS 凭证）。若默认 HTTPS 拉不下来，可指定 SSH：
+
+```bash
+HO_RULES_REPO=git@github.com:willkan/ho-rules.git \
+  bash -c 'curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash'
+```
+
+### 环境变量
+
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `HO_RULES_HOME` | `~/dev/ho-rules` | 本地仓库路径 |
+| `HO_RULES_REPO` | `https://github.com/willkan/ho-rules.git` | git remote URL |
+| `HO_RULES_REF` | `main` | 分支 / tag |
+
+示例：
+
+```bash
+HO_RULES_HOME=~/src/ho-rules HO_RULES_REF=main \
+  curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash -s -- --cli --force
+```
+
+安装后确认：
+
+```bash
+ho-rules version
+ho-rules status
+```
+
+确保 `~/dev/bin`（或 `~/.local/bin`）在 `PATH` 中。
+
+---
+
+## 手动安装
+
+```bash
+git clone https://github.com/willkan/ho-rules.git ~/dev/ho-rules
 cd ~/dev/ho-rules
 
-# 安装全部 agent 路径 + 把 ho-rules 放进 PATH
+# 仅 CLI 入口
+./ho-rules install --cli --force
+
+# CLI + 全部 agent 路径
 ./ho-rules install --all --force --cli
 
 # 或只装部分
 ./ho-rules install -a codex,claude,grok --force
 ./ho-rules install codex cursor --force
 ```
-
-确保 `~/dev/bin`（或 `~/.local/bin`）在 `PATH` 中。
 
 ## 命令
 
@@ -58,9 +135,11 @@ cd ~/dev/ho-rules
 ho-rules publish -m "clarify git author policy"
 
 # 合并后，机器 B：
-cd ~/dev/ho-rules
 ho-rules update
-# symlink 已指向文件，pull 即生效，无需 reinstall
+# 或重新跑 bootstrap（已有 clone 会 ff-only 更新）
+curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash
+
+# symlink 已指向文件，pull 即生效
 ```
 
 ### publish
@@ -93,4 +172,5 @@ ho-rules publish -m "..." --no-pr    # 只推 branch
 ```bash
 cd ~/dev/ho-rules
 gh repo create ho-rules --private --source=. --remote=origin --push
+# 公开则把 --private 换成 --public（curl raw 更方便）
 ```
