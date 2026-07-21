@@ -1,28 +1,20 @@
 #!/usr/bin/env bash
 # Bootstrap ho-rules: clone/update repo and install the `ho-rules` CLI entry.
 #
-# Quick install (public repo):
+# Quick install:
 #   curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash
 #
 # With agent links:
 #   curl -fsSL .../bootstrap.sh | bash -s -- --all
 #
-# Private repo (needs network auth for git clone; fetch script via gh or token):
-#   gh api repos/willkan/ho-rules/contents/bootstrap.sh --jq .content \
-#     | base64 --decode | bash -s -- --all
-#   # or:
-#   curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" \
-#     -H "Accept: application/vnd.github.raw" \
-#     https://api.github.com/repos/willkan/ho-rules/contents/bootstrap.sh | bash
-#
 # Env:
 #   HO_RULES_HOME   install dir (default: ~/dev/ho-rules)
-#   HO_RULES_REPO   git URL (default: https://github.com/willkan/ho-rules.git)
+#   HO_RULES_REPO   git URL (default: git@github.com:willkan/ho-rules.git)
 #   HO_RULES_REF    branch/tag (default: main)
 set -euo pipefail
 
 HO_RULES_HOME="${HO_RULES_HOME:-${HOME}/dev/ho-rules}"
-HO_RULES_REPO="${HO_RULES_REPO:-https://github.com/willkan/ho-rules.git}"
+HO_RULES_REPO="${HO_RULES_REPO:-git@github.com:willkan/ho-rules.git}"
 HO_RULES_REF="${HO_RULES_REF:-main}"
 
 log() { printf '%s\n' "$*"; }
@@ -78,7 +70,7 @@ else
   log "==> cloning"
   mkdir -p "$(dirname "$HO_RULES_HOME")"
   git clone --branch "$HO_RULES_REF" --single-branch "$HO_RULES_REPO" "$HO_RULES_HOME" \
-    || die "clone failed; check HO_RULES_REPO / credentials (private repos need SSH or gh auth)"
+    || die "clone failed; check HO_RULES_REPO and SSH access to GitHub"
 fi
 
 [[ -x "${HO_RULES_HOME}/ho-rules" ]] || die "ho-rules entry missing after clone: ${HO_RULES_HOME}/ho-rules"

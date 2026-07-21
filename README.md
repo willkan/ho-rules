@@ -4,6 +4,8 @@
 
 Shared global rules across machines and coding agents. The single source of truth is this repo’s `AGENTS.md`.
 
+Repository: `git@github.com:willkan/ho-rules.git`
+
 Unified CLI:
 
 ```bash
@@ -13,8 +15,6 @@ ho-rules <command>
 ## One-line install (curl)
 
 By default this only installs the **`ho-rules` CLI entry** (symlink into `~/dev/bin` or `~/.local/bin`) and places the repo at `~/dev/ho-rules`.
-
-### Public repository
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash
@@ -32,40 +32,12 @@ Selected agents only:
 curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash -s -- -a codex,claude,grok
 ```
 
-### Private repository
-
-`raw.githubusercontent.com` needs a token, or fetch the script with `gh`:
-
-```bash
-# Recommended: authenticated gh
-gh api repos/willkan/ho-rules/contents/bootstrap.sh --jq .content \
-  | base64 --decode | bash
-
-# Also install all agent links
-gh api repos/willkan/ho-rules/contents/bootstrap.sh --jq .content \
-  | base64 --decode | bash -s -- --all
-
-# Or curl + token
-curl -fsSL \
-  -H "Authorization: Bearer $GITHUB_TOKEN" \
-  -H "Accept: application/vnd.github.raw" \
-  https://api.github.com/repos/willkan/ho-rules/contents/bootstrap.sh \
-  | bash -s -- --all
-```
-
-Clone still uses `git` (SSH or configured HTTPS credentials). If HTTPS clone fails, use SSH:
-
-```bash
-HO_RULES_REPO=git@github.com:willkan/ho-rules.git \
-  bash -c 'curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash'
-```
-
 ### Environment variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `HO_RULES_HOME` | `~/dev/ho-rules` | Local repo path |
-| `HO_RULES_REPO` | `https://github.com/willkan/ho-rules.git` | Git remote URL |
+| `HO_RULES_REPO` | `git@github.com:willkan/ho-rules.git` | Git remote URL |
 | `HO_RULES_REF` | `main` | Branch / tag |
 
 Example:
@@ -89,7 +61,7 @@ Ensure `~/dev/bin` (or `~/.local/bin`) is on your `PATH`.
 ## Manual install
 
 ```bash
-git clone https://github.com/willkan/ho-rules.git ~/dev/ho-rules
+git clone git@github.com:willkan/ho-rules.git ~/dev/ho-rules
 cd ~/dev/ho-rules
 
 # CLI only
@@ -169,11 +141,3 @@ Requires `origin` remote and authenticated `gh` when creating a PR.
 | `continue` | `~/.continue/config/AGENTS.md` |
 
 Edit only this repo’s `AGENTS.md`. Do not treat `~/.codex/...` (and similar) link targets as the source of truth.
-
-## Publish to GitHub
-
-```bash
-cd ~/dev/ho-rules
-gh repo create ho-rules --private --source=. --remote=origin --push
-# Use --public instead of --private for easier curl raw install
-```

@@ -4,6 +4,8 @@
 
 跨机器、跨 coding agent 共用的全局规则。**唯一真相**是本仓库的 `AGENTS.md`。
 
+仓库地址：`git@github.com:willkan/ho-rules.git`
+
 统一入口：
 
 ```bash
@@ -13,8 +15,6 @@ ho-rules <command>
 ## 一键安装（curl）
 
 默认只安装 **`ho-rules` CLI 入口**（软链到 `~/dev/bin` 或 `~/.local/bin`），并把仓库放到 `~/dev/ho-rules`。
-
-### 公开仓库
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash
@@ -32,40 +32,12 @@ curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh 
 curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash -s -- -a codex,claude,grok
 ```
 
-### 私有仓库
-
-`raw.githubusercontent.com` 需要带 token，或用 `gh` 拉脚本：
-
-```bash
-# 推荐：已登录 gh
-gh api repos/willkan/ho-rules/contents/bootstrap.sh --jq .content \
-  | base64 --decode | bash
-
-# 同时装全部 agent 链接
-gh api repos/willkan/ho-rules/contents/bootstrap.sh --jq .content \
-  | base64 --decode | bash -s -- --all
-
-# 或 curl + token
-curl -fsSL \
-  -H "Authorization: Bearer $GITHUB_TOKEN" \
-  -H "Accept: application/vnd.github.raw" \
-  https://api.github.com/repos/willkan/ho-rules/contents/bootstrap.sh \
-  | bash -s -- --all
-```
-
-clone 仍走 `git`（SSH 或已配置的 HTTPS 凭证）。若默认 HTTPS 拉不下来，可指定 SSH：
-
-```bash
-HO_RULES_REPO=git@github.com:willkan/ho-rules.git \
-  bash -c 'curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash'
-```
-
 ### 环境变量
 
 | 变量 | 默认 | 说明 |
 |------|------|------|
 | `HO_RULES_HOME` | `~/dev/ho-rules` | 本地仓库路径 |
-| `HO_RULES_REPO` | `https://github.com/willkan/ho-rules.git` | git remote URL |
+| `HO_RULES_REPO` | `git@github.com:willkan/ho-rules.git` | git remote URL |
 | `HO_RULES_REF` | `main` | 分支 / tag |
 
 示例：
@@ -89,7 +61,7 @@ ho-rules status
 ## 手动安装
 
 ```bash
-git clone https://github.com/willkan/ho-rules.git ~/dev/ho-rules
+git clone git@github.com:willkan/ho-rules.git ~/dev/ho-rules
 cd ~/dev/ho-rules
 
 # 仅 CLI 入口
@@ -169,11 +141,3 @@ ho-rules publish -m "..." --no-pr    # 只推 branch
 | `continue` | `~/.continue/config/AGENTS.md` |
 
 只在本仓库改 `AGENTS.md`，不要在 `~/.codex/...` 等链接路径上直接当“源文件”维护。
-
-## 发布到 GitHub
-
-```bash
-cd ~/dev/ho-rules
-gh repo create ho-rules --private --source=. --remote=origin --push
-# 公开则把 --private 换成 --public（curl raw 更方便）
-```
