@@ -74,14 +74,24 @@ HO_RULES_HOME=~/src/ho-rules HO_RULES_REF=main \
   curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash -s -- --cli --force
 ```
 
-安装后确认：
+安装后确认（`curl | bash` 刚结束时当前 shell 里可能暂时没有 `ho-rules`，这是预期行为）：
 
 ```bash
+# 始终可用：
+~/dev/bin/ho-rules version    # 或 ~/.local/bin/ho-rules
+# PATH 就绪 / 新开终端后：
 ho-rules version
 ho-rules status
 ```
 
-确保 `~/dev/bin`（或 `~/.local/bin`）在 `PATH` 中。
+**为什么 curl 装完不能立刻敲 `ho-rules`：** 安装只是在 `~/dev/bin` 或 `~/.local/bin` 建软链；`curl | bash` 无法改你当前交互 shell 的 `PATH`。当前 shell 可先：
+
+```bash
+export PATH="$HOME/dev/bin:$HOME/.local/bin:$PATH" && hash -r
+ho-rules help
+```
+
+若检测到目录不在 PATH 上，安装会往 shell rc 写入片段；新开终端后即可直接用。
 
 ---
 

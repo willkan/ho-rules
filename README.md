@@ -74,14 +74,24 @@ HO_RULES_HOME=~/src/ho-rules HO_RULES_REF=main \
   curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash -s -- --cli --force
 ```
 
-Verify:
+Verify (same shell right after `curl | bash` may not find `ho-rules` yet — that is expected):
 
 ```bash
+# always works:
+~/dev/bin/ho-rules version    # or ~/.local/bin/ho-rules
+# after PATH is set / new terminal:
 ho-rules version
 ho-rules status
 ```
 
-Ensure `~/dev/bin` (or `~/.local/bin`) is on your `PATH`.
+**Why `ho-rules` is not immediate after curl:** the installer only creates a symlink under `~/dev/bin` or `~/.local/bin`. `curl | bash` cannot change your current interactive shell’s `PATH`. Fix for this shell:
+
+```bash
+export PATH="$HOME/dev/bin:$HOME/.local/bin:$PATH" && hash -r
+ho-rules help
+```
+
+Install also appends a small PATH snippet to your shell rc when needed; open a new terminal afterward.
 
 ---
 

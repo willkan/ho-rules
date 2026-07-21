@@ -78,17 +78,9 @@ fi
 log "==> installing CLI entry"
 "${HO_RULES_HOME}/ho-rules" install "${INSTALL_ARGS[@]}"
 
-bin_dir="${HOME}/dev/bin"
-if [[ ! -d "$bin_dir" ]]; then
-  bin_dir="${HOME}/.local/bin"
-fi
-
 log ""
-log "Done. Try: ho-rules help"
-case ":${PATH}:" in
-  *":${bin_dir}:"*) ;;
-  *)
-    log "Add to PATH if needed:"
-    log "  export PATH=\"${bin_dir}:\$PATH\""
-    ;;
-esac
+log "Done."
+log "Note: curl|bash runs in a subshell and cannot put ho-rules on your"
+log "interactive shell PATH by itself. Use the absolute path printed above,"
+log "or: export PATH=\"\$HOME/.local/bin:\$HOME/dev/bin:\$PATH\" && hash -r"
+log "New terminals pick up PATH if a shell rc snippet was written."

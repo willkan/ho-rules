@@ -332,11 +332,105 @@ uninstall_path() {
   fi
 }
 
+# Prefer a personal bin already on PATH so `ho-rules` works in this shell when possible.
 default_cli_bin_dir() {
-  if [[ -d "${HOME}/dev/bin" ]]; then
-    printf '%s\n' "${HOME}/dev/bin"
+  local cand
+  for cand in "${HOME}/dev/bin" "${HOME}/.local/bin" "${HOME}/bin"; do
+    case ":${PATH}:" in
+      *":${cand}:"*)
+        printf '%s\n' "$cand"
+        return 0
+        ;;
+    esac
+  done
+  for cand in "${HOME}/dev/bin" "${HOME}/.local/bin"; do
+    if [[ -d "$cand" ]]; then
+      printf '%s\n' "$cand"
+      return 0
+    fi
+  done
+  printf '%s\n' "${HOME}/.local/bin"
+}
+
+path_contains_dir() {
+  case ":${PATH}:" in
+    *":$1:"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Idempotently ensure bin_dir is exported in common shell rc files.
+# curl|bash cannot change the parent interactive shell; rc fixes new terminals.
+ensure_bin_dir_on_path_rc() {
+  local bin_dir="$1"
+  local marker="# ho-rules PATH"
+  local block
+  block="$(printf '\n%s\nexport PATH="%s:$PATH"\n' "$marker" "$bin_dir")"
+
+  local rc written=0
+  local candidates=()
+  case "${SHELL:-}" in
+    */zsh)
+      candidates+=("${HOME}/.zshrc")
+      # Login shells on macOS often only read .zprofile
+      candidates+=("${HOME}/.zprofile")
+      ;;
+    */bash)
+      candidates+=("${HOME}/.bashrc")
+      candidates+=("${HOME}/.bash_profile")
+      ;;
+    *)
+      candidates+=("${HOME}/.zshrc" "${HOME}/.zprofile" "${HOME}/.bashrc" "${HOME}/.bash_profile")
+      ;;
+  esac
+
+  for rc in "${candidates[@]}"; do
+    if [[ -f "$rc" ]] && grep -F "$marker" "$rc" >/dev/null 2>&1; then
+      written=1
+      continue
+    fi
+    # Only create/update the primary rc for the current shell family if missing.
+    if [[ ! -f "$rc" ]]; then
+      case "$rc" in
+        "${HOME}/.zshrc"|"${HOME}/.bashrc") ;;
+        *) continue ;;
+      esac
+    fi
+    if [[ "${DRY_RUN:-0}" -eq 1 ]]; then
+      log "  DRY-RUN: append PATH to $rc"
+      written=1
+      continue
+    fi
+    if [[ ! -f "$rc" ]]; then
+      printf '%s\n' "$block" >"$rc"
+    else
+      printf '%s\n' "$block" >>"$rc"
+    fi
+    log "  PATH snippet appended: $rc"
+    written=1
+  done
+
+  if [[ "$written" -eq 0 && "${DRY_RUN:-0}" -eq 0 ]]; then
+    # Fallback: create ~/.zshrc or ~/.bashrc
+    local fallback="${HOME}/.zshrc"
+    [[ "${SHELL:-}" == */bash ]] && fallback="${HOME}/.bashrc"
+    printf '%s\n' "$block" >"$fallback"
+    log "  PATH snippet written: $fallback"
+  fi
+}
+
+print_cli_usage_hints() {
+  local bin_dir="$1"
+  local dest="${bin_dir}/ho-rules"
+  log ""
+  log "  Immediate use (this shell / after curl | bash):"
+  log "    ${dest} help"
+  if path_contains_dir "$bin_dir"; then
+    log "    ho-rules help"
   else
-    printf '%s\n' "${HOME}/.local/bin"
+    log "  Or add to THIS shell, then retry:"
+    log "    export PATH=\"${bin_dir}:\$PATH\" && hash -r && ho-rules help"
+    log "  (curl|bash cannot change your interactive shell PATH; open a new terminal after rc update.)"
   fi
 }
 
@@ -355,6 +449,10 @@ install_cli_shim() {
     t="$(resolve_link_target "$dest")"
     if [[ "$t" == "$REPO_ROOT/ho-rules" ]]; then
       log "  already linked -> skip"
+      if ! path_contains_dir "$bin_dir"; then
+        ensure_bin_dir_on_path_rc "$bin_dir"
+      fi
+      print_cli_usage_hints "$bin_dir"
       return 0
     fi
   fi
@@ -372,12 +470,10 @@ install_cli_shim() {
     ln -sfn "$REPO_ROOT/ho-rules" "$dest"
     log "  linked"
   fi
-  case ":$PATH:" in
-    *":${bin_dir}:"*) ;;
-    *)
-      log "  note: ensure ${bin_dir} is on PATH"
-      ;;
-  esac
+  if ! path_contains_dir "$bin_dir"; then
+    ensure_bin_dir_on_path_rc "$bin_dir"
+  fi
+  print_cli_usage_hints "$bin_dir"
 }
 
 uninstall_cli_shim() {
