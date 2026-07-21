@@ -1,68 +1,96 @@
-# agent-rules
+# ho-rules
 
-一份跨机器、跨 coding agent 共用的全局规则：`AGENTS.md`。
+跨机器、跨 coding agent 共用的全局规则。**唯一真相**是本仓库的 `AGENTS.md`。
 
-编辑以本仓库根目录的 **`AGENTS.md` 为唯一真相**，用 `install.sh` 挂到各 agent 会读的全局路径。
-
-## 新机器 / 多机同步
+统一入口：
 
 ```bash
-# 1. clone
-git clone <your-github-url> ~/dev/agent-rules
-cd ~/dev/agent-rules
-
-# 2. 安装到本机各 agent 路径（默认 symlink）
-./install.sh --force
+ho-rules <command>
 ```
 
-之后只改仓库里的 `AGENTS.md`，`git push` / 另一台 `git pull`。  
-symlink 模式下 pull 后无需重装；`--copy` 模式下 pull 后要再跑一次 `./install.sh --force`。
+## 快速开始
 
-## 脚本
+```bash
+git clone <your-github-url> ~/dev/ho-rules
+cd ~/dev/ho-rules
+
+# 安装全部 agent 路径 + 把 ho-rules 放进 PATH
+./ho-rules install --all --force --cli
+
+# 或只装部分
+./ho-rules install -a codex,claude,grok --force
+./ho-rules install codex cursor --force
+```
+
+确保 `~/dev/bin`（或 `~/.local/bin`）在 `PATH` 中。
+
+## 命令
 
 | 命令 | 说明 |
 |------|------|
-| `./install.sh` | 交互安装（已有文件会询问） |
-| `./install.sh --force` | 覆盖已有目标（先备份为 `*.bak.<timestamp>`） |
-| `./install.sh --copy` | 复制而非软链（适合不支持 symlink 的环境） |
-| `./install.sh --dry-run` | 只打印将要执行的操作 |
-| `./uninstall.sh` | 删除仍指向本仓库的 symlink |
+| `ho-rules install` | 软链 `AGENTS.md` 到 agent 全局路径（默认 symlink） |
+| `ho-rules uninstall` | 删除指向本仓库的软链 |
+| `ho-rules status` | 查看各路径安装状态 |
+| `ho-rules list` | 列出可选 agent id |
+| `ho-rules update` | `git pull --ff-only` 拉取最新规则 |
+| `ho-rules publish` | 提交 `AGENTS.md`、推 branch、开 PR |
+| `ho-rules path` | 打印仓库路径 |
+| `ho-rules help [cmd]` | 帮助 |
 
-## 安装目标
+### install 选型
 
-| Agent | Path |
-|-------|------|
-| Codex CLI | `~/.codex/AGENTS.md` |
-| Claude Code | `~/.claude/CLAUDE.md`、`~/.claude/AGENTS.md` |
-| Grok Build | `~/.grok/rules/AGENTS.md` |
-| Cursor | `~/.cursor/AGENTS.md`、`~/.cursor/rules/AGENTS.mdc` |
-| Gemini CLI | `~/.gemini/GEMINI.md` |
-| OpenCode | `~/.config/opencode/AGENTS.md` |
-| Continue | `~/.continue/config/AGENTS.md` |
+```bash
+ho-rules install --all --force          # 全部
+ho-rules install -a codex,claude        # 逗号分隔
+ho-rules install -a grok -a cursor      # 重复 -a
+ho-rules install codex gemini           # 位置参数
+ho-rules install --cli --force          # 额外安装 CLI 到 PATH
+```
 
-说明：
+默认始终是 **软链接**。只有环境不能 symlink 时才用 `--copy`（不推荐）。
 
-- 父目录不存在时会自动创建。
-- 若目标已是指向本仓库的 symlink，会跳过。
-- 替换真实文件前会备份，不会静默覆盖。
+### 多机同步
 
-## 工作流建议
+```bash
+# 机器 A：改规则并提 PR
+cd ~/dev/ho-rules
+# edit AGENTS.md
+ho-rules publish -m "clarify git author policy"
 
-1. 只在 `~/dev/agent-rules` 里改 `AGENTS.md`
-2. commit / push
-3. 其他机器 `git pull`（symlink 即生效）
+# 合并后，机器 B：
+cd ~/dev/ho-rules
+ho-rules update
+# symlink 已指向文件，pull 即生效，无需 reinstall
+```
 
-不要反过来在 `~/.codex/AGENTS.md` 等路径直接改内容——那些应是指向本仓库的链接。
+### publish
+
+```bash
+ho-rules publish -m "update fallback policy"
+ho-rules publish -m "..." -b rules/my-topic --base main
+ho-rules publish -m "..." --draft
+ho-rules publish -m "..." --no-pr    # 只推 branch
+```
+
+需要 `origin` remote 和已登录的 `gh`（开 PR 时）。
+
+## Agent 路径
+
+| id | 路径 |
+|----|------|
+| `codex` | `~/.codex/AGENTS.md` |
+| `claude` | `~/.claude/CLAUDE.md`, `~/.claude/AGENTS.md` |
+| `grok` | `~/.grok/rules/AGENTS.md` |
+| `cursor` | `~/.cursor/AGENTS.md`, `~/.cursor/rules/AGENTS.mdc` |
+| `gemini` | `~/.gemini/GEMINI.md` |
+| `opencode` | `~/.config/opencode/AGENTS.md` |
+| `continue` | `~/.continue/config/AGENTS.md` |
+
+只在本仓库改 `AGENTS.md`，不要在 `~/.codex/...` 等链接路径上直接当“源文件”维护。
 
 ## 发布到 GitHub
 
 ```bash
-cd ~/dev/agent-rules
-gh repo create agent-rules --private --source=. --remote=origin --push
-# 或 public:
-# gh repo create agent-rules --public --source=. --remote=origin --push
+cd ~/dev/ho-rules
+gh repo create ho-rules --private --source=. --remote=origin --push
 ```
-
-## License
-
-Private personal rules by default. Adjust if you make the repo public.

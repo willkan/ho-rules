@@ -1,0 +1,801 @@
+#!/usr/bin/env bash
+# ho-rules — single entrypoint for shared coding-agent global rules.
+set -euo pipefail
+
+# Resolve this script to the real file path so PATH shims work.
+_resolve_script() {
+  local src="${BASH_SOURCE[0]}"
+  local dir target
+  while [[ -L "$src" ]]; do
+    dir="$(cd "$(dirname "$src")" && pwd)"
+    target="$(readlink "$src")"
+    if [[ "$target" == /* ]]; then
+      src="$target"
+    else
+      src="$dir/$target"
+    fi
+  done
+  cd "$(dirname "$src")" && pwd
+}
+
+REPO_ROOT="$(_resolve_script)"
+SOURCE="${REPO_ROOT}/AGENTS.md"
+SOURCE_REAL="${REPO_ROOT}/AGENTS.md"
+
+# ---------------------------------------------------------------------------
+# Agent registry
+# ---------------------------------------------------------------------------
+
+ALL_AGENTS=(codex claude grok cursor gemini opencode continue)
+
+agent_label() {
+  case "$1" in
+    codex) echo "Codex CLI" ;;
+    claude) echo "Claude Code" ;;
+    grok) echo "Grok Build" ;;
+    cursor) echo "Cursor" ;;
+    gemini) echo "Gemini CLI" ;;
+    opencode) echo "OpenCode" ;;
+    continue) echo "Continue" ;;
+    *) echo "unknown" ;;
+  esac
+}
+
+# Print one absolute path per line for an agent id.
+agent_paths() {
+  case "$1" in
+    codex)
+      printf '%s\n' "${HOME}/.codex/AGENTS.md"
+      ;;
+    claude)
+      printf '%s\n' \
+        "${HOME}/.claude/CLAUDE.md" \
+        "${HOME}/.claude/AGENTS.md"
+      ;;
+    grok)
+      printf '%s\n' "${HOME}/.grok/rules/AGENTS.md"
+      ;;
+    cursor)
+      printf '%s\n' \
+        "${HOME}/.cursor/AGENTS.md" \
+        "${HOME}/.cursor/rules/AGENTS.mdc"
+      ;;
+    gemini)
+      printf '%s\n' "${HOME}/.gemini/GEMINI.md"
+      ;;
+    opencode)
+      printf '%s\n' "${HOME}/.config/opencode/AGENTS.md"
+      ;;
+    continue)
+      printf '%s\n' "${HOME}/.continue/config/AGENTS.md"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+is_known_agent() {
+  local a
+  for a in "${ALL_AGENTS[@]}"; do
+    [[ "$a" == "$1" ]] && return 0
+  done
+  return 1
+}
+
+# ---------------------------------------------------------------------------
+# Common helpers
+# ---------------------------------------------------------------------------
+
+log() { printf '%s\n' "$*"; }
+die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+
+require_source() {
+  [[ -f "$SOURCE" ]] || die "source not found: $SOURCE"
+}
+
+resolve_link_target() {
+  local path="$1" target dir
+  target="$(readlink "$path")"
+  if [[ "$target" != /* ]]; then
+    dir="$(cd "$(dirname "$path")" && pwd)"
+    target="$(cd "$dir" && cd "$(dirname "$target")" 2>/dev/null && pwd)/$(basename "$target")" || {
+      printf '%s\n' "$target"
+      return 0
+    }
+  fi
+  printf '%s\n' "$target"
+}
+
+points_at_source() {
+  local path="$1" target
+  [[ -L "$path" ]] || return 1
+  target="$(resolve_link_target "$path")"
+  [[ "$target" == "$SOURCE_REAL" ]]
+}
+
+parse_agent_list() {
+  # stdin: tokens that may be comma-separated; stdout: unique known agents
+  local raw part seen=()
+  while IFS= read -r raw; do
+    [[ -z "$raw" ]] && continue
+    IFS=',' read -ra parts <<<"$raw"
+    for part in "${parts[@]}"; do
+      part="$(printf '%s' "$part" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+      [[ -z "$part" ]] && continue
+      part="$(printf '%s' "$part" | tr '[:upper:]' '[:lower:]')"
+      is_known_agent "$part" || die "unknown agent: $part (run: ho-rules list)"
+      local s
+      for s in "${seen[@]+"${seen[@]}"}"; do
+        [[ "$s" == "$part" ]] && continue 2
+      done
+      seen+=("$part")
+      printf '%s\n' "$part"
+    done
+  done
+}
+
+usage_root() {
+  cat <<EOF
+Usage: ho-rules <command> [options]
+
+Shared AGENTS.md for multiple coding agents. Canonical file:
+  ${SOURCE_REAL}
+
+Commands:
+  install     Symlink AGENTS.md into agent global paths
+  uninstall   Remove symlinks that point at this repo
+  status      Show install status for each agent
+  list        List available agent ids
+  update      Pull latest rules from git remote (ff-only)
+  publish     Commit AGENTS.md changes, push branch, open PR
+  path        Print repo root
+  version     Print version info
+  help        Show this help or command help
+
+Examples:
+  ho-rules install --all --force
+  ho-rules install -a codex,claude,grok
+  ho-rules install codex cursor --force
+  ho-rules update
+  ho-rules publish -m "tighten fallback policy"
+  ho-rules status
+
+Run \`ho-rules help <command>\` for command-specific options.
+EOF
+}
+
+usage_install() {
+  cat <<'EOF'
+Usage: ho-rules install [agents...] [options]
+
+Symlink this repo's AGENTS.md into selected agent global paths.
+Default mode is always symlink. Prefer --force on first install.
+
+Agent selection (any of):
+  --all                 Install all known agents (default if none given)
+  -a, --agent <id>      Agent id or comma-separated list (repeatable)
+  <id> ...              Positional agent ids
+
+Options:
+  --force               Backup and replace existing targets
+  --copy                Copy instead of symlink (not recommended)
+  --cli                 Also install ho-rules into PATH (~/dev/bin or ~/.local/bin)
+  --dry-run             Print actions only
+  -h, --help            Show help
+EOF
+}
+
+usage_uninstall() {
+  cat <<'EOF'
+Usage: ho-rules uninstall [agents...] [options]
+
+Remove symlinks that still point at this repo's AGENTS.md.
+Does not delete real files or backups.
+
+Agent selection same as install (--all / -a / positional).
+Default: all agents.
+
+Options:
+  --cli                 Also remove PATH shim for ho-rules
+  --dry-run
+  -h, --help
+EOF
+}
+
+usage_publish() {
+  cat <<'EOF'
+Usage: ho-rules publish [options]
+
+Commit local AGENTS.md changes, push a branch, and open a GitHub PR.
+
+Options:
+  -m, --message <msg>   Commit / PR title (required if not using --no-commit)
+  -b, --branch <name>   Branch name (default: rules/update-<timestamp>)
+  --base <branch>       PR base branch (default: main)
+  --draft               Open draft PR
+  --no-pr               Push branch only (no gh pr create)
+  --no-commit           Assume changes already committed; only push + PR
+  --dry-run
+  -h, --help
+
+Requires: git remote origin, and \`gh\` authenticated for PR creation.
+EOF
+}
+
+usage_update() {
+  cat <<'EOF'
+Usage: ho-rules update [options]
+
+Fetch and fast-forward the current branch from origin.
+
+Options:
+  --dry-run
+  -h, --help
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# install / uninstall core
+# ---------------------------------------------------------------------------
+
+backup_path() {
+  local path="$1" ts bak
+  ts="$(date +%Y%m%dT%H%M%S)"
+  bak="${path}.bak.${ts}"
+  log "  backup: $path -> $bak"
+  [[ "${DRY_RUN:-0}" -eq 1 ]] && return 0
+  mv "$path" "$bak"
+}
+
+install_path() {
+  local dest="$1"
+  local dest_dir
+  dest_dir="$(dirname "$dest")"
+
+  log "  path: $dest"
+
+  if [[ ! -d "$dest_dir" ]]; then
+    log "  mkdir: $dest_dir"
+    [[ "${DRY_RUN:-0}" -eq 0 ]] && mkdir -p "$dest_dir"
+  fi
+
+  if points_at_source "$dest"; then
+    log "  already linked -> skip"
+    return 0
+  fi
+
+  if [[ "${MODE:-symlink}" == "copy" && -f "$dest" && ! -L "$dest" ]]; then
+    if cmp -s "$SOURCE" "$dest"; then
+      log "  already identical copy -> skip"
+      return 0
+    fi
+  fi
+
+  if [[ -e "$dest" || -L "$dest" ]]; then
+    if [[ "${FORCE:-0}" -eq 1 || "${DRY_RUN:-0}" -eq 1 ]]; then
+      backup_path "$dest"
+    elif [[ -t 0 ]]; then
+      printf "  exists and differs. Replace (backup first)? [y/N] "
+      read -r ans
+      if [[ ! "$ans" =~ ^[Yy]$ ]]; then
+        log "  skipped"
+        return 0
+      fi
+      backup_path "$dest"
+    else
+      log "  exists; use --force to replace (non-interactive)"
+      return 0
+    fi
+  fi
+
+  if [[ "${MODE:-symlink}" == "symlink" ]]; then
+    if [[ "${DRY_RUN:-0}" -eq 1 ]]; then
+      log "  DRY-RUN: ln -sfn $SOURCE_REAL $dest"
+    else
+      ln -sfn "$SOURCE_REAL" "$dest"
+      log "  linked"
+    fi
+  else
+    if [[ "${DRY_RUN:-0}" -eq 1 ]]; then
+      log "  DRY-RUN: cp $SOURCE $dest"
+    else
+      cp "$SOURCE" "$dest"
+      log "  copied"
+    fi
+  fi
+}
+
+uninstall_path() {
+  local dest="$1"
+  if [[ ! -L "$dest" ]]; then
+    if [[ -e "$dest" ]]; then
+      log "  not a symlink (leave): $dest"
+    fi
+    return 0
+  fi
+  if points_at_source "$dest"; then
+    if [[ "${DRY_RUN:-0}" -eq 1 ]]; then
+      log "  DRY-RUN: rm $dest"
+    else
+      rm "$dest"
+      log "  removed: $dest"
+    fi
+  else
+    log "  points elsewhere (leave): $dest -> $(readlink "$dest")"
+  fi
+}
+
+default_cli_bin_dir() {
+  if [[ -d "${HOME}/dev/bin" ]]; then
+    printf '%s\n' "${HOME}/dev/bin"
+  else
+    printf '%s\n' "${HOME}/.local/bin"
+  fi
+}
+
+install_cli_shim() {
+  local bin_dir dest
+  bin_dir="$(default_cli_bin_dir)"
+  dest="${bin_dir}/ho-rules"
+  log "==> CLI shim"
+  log "    $dest -> $REPO_ROOT/ho-rules"
+  if [[ ! -d "$bin_dir" ]]; then
+    log "  mkdir: $bin_dir"
+    [[ "${DRY_RUN:-0}" -eq 0 ]] && mkdir -p "$bin_dir"
+  fi
+  if [[ -L "$dest" ]]; then
+    local t
+    t="$(resolve_link_target "$dest")"
+    if [[ "$t" == "$REPO_ROOT/ho-rules" ]]; then
+      log "  already linked -> skip"
+      return 0
+    fi
+  fi
+  if [[ -e "$dest" || -L "$dest" ]]; then
+    if [[ "${FORCE:-0}" -eq 1 || "${DRY_RUN:-0}" -eq 1 ]]; then
+      backup_path "$dest"
+    else
+      log "  exists; use --force to replace"
+      return 0
+    fi
+  fi
+  if [[ "${DRY_RUN:-0}" -eq 1 ]]; then
+    log "  DRY-RUN: ln -sfn $REPO_ROOT/ho-rules $dest"
+  else
+    ln -sfn "$REPO_ROOT/ho-rules" "$dest"
+    log "  linked"
+  fi
+  case ":$PATH:" in
+    *":${bin_dir}:"*) ;;
+    *)
+      log "  note: ensure ${bin_dir} is on PATH"
+      ;;
+  esac
+}
+
+uninstall_cli_shim() {
+  local bin_dir dest t
+  bin_dir="$(default_cli_bin_dir)"
+  dest="${bin_dir}/ho-rules"
+  [[ -L "$dest" ]] || return 0
+  t="$(resolve_link_target "$dest")"
+  if [[ "$t" == "$REPO_ROOT/ho-rules" ]]; then
+    if [[ "${DRY_RUN:-0}" -eq 1 ]]; then
+      log "DRY-RUN: rm $dest"
+    else
+      rm "$dest"
+      log "removed CLI shim: $dest"
+    fi
+  fi
+}
+
+cmd_list() {
+  local a
+  log "Available agents:"
+  for a in "${ALL_AGENTS[@]}"; do
+    printf '  %-10s  %s\n' "$a" "$(agent_label "$a")"
+    agent_paths "$a" | sed 's/^/    /'
+  done
+}
+
+cmd_status() {
+  require_source
+  local a dest ok
+  log "Source: $SOURCE_REAL"
+  log ""
+  for a in "${ALL_AGENTS[@]}"; do
+    log "$(agent_label "$a") [$a]"
+    while IFS= read -r dest; do
+      if points_at_source "$dest"; then
+        log "  OK   $dest"
+      elif [[ -L "$dest" ]]; then
+        log "  LINK $dest -> $(readlink "$dest")  (not this repo)"
+      elif [[ -e "$dest" ]]; then
+        if cmp -s "$SOURCE" "$dest" 2>/dev/null; then
+          log "  COPY $dest  (same content, not symlink)"
+        else
+          log "  FILE $dest  (different content)"
+        fi
+      else
+        log "  MISS $dest"
+      fi
+    done < <(agent_paths "$a")
+  done
+  log ""
+  local shim
+  shim="$(default_cli_bin_dir)/ho-rules"
+  if points_at_source_cli "$shim"; then
+    log "CLI shim: OK  $shim"
+  elif [[ -e "$shim" || -L "$shim" ]]; then
+    log "CLI shim: present but not this repo: $shim"
+  else
+    log "CLI shim: MISS  $shim  (ho-rules install --cli)"
+  fi
+}
+
+points_at_source_cli() {
+  local path="$1" target
+  [[ -L "$path" ]] || return 1
+  target="$(resolve_link_target "$path")"
+  [[ "$target" == "$REPO_ROOT/ho-rules" ]]
+}
+
+select_agents_from_args() {
+  # Sets global SELECTED_AGENTS array. Consumes remaining "$@".
+  # Call after parsing known flags into leftover args.
+  SELECTED_AGENTS=()
+  local want_all=0
+  local raw_agents=()
+  local arg
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --all)
+        want_all=1
+        shift
+        ;;
+      -a|--agent)
+        [[ $# -ge 2 ]] || die "$1 requires a value"
+        raw_agents+=("$2")
+        shift 2
+        ;;
+      --agent=*)
+        raw_agents+=("${1#--agent=}")
+        shift
+        ;;
+      -*)
+        die "unknown option: $1"
+        ;;
+      *)
+        raw_agents+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  if [[ "$want_all" -eq 1 || ${#raw_agents[@]} -eq 0 ]]; then
+    SELECTED_AGENTS=("${ALL_AGENTS[@]}")
+    return 0
+  fi
+
+  local line
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && SELECTED_AGENTS+=("$line")
+  done < <(printf '%s\n' "${raw_agents[@]}" | parse_agent_list)
+  [[ ${#SELECTED_AGENTS[@]} -gt 0 ]] || die "no agents selected"
+}
+
+cmd_install() {
+  require_source
+  MODE="symlink"
+  FORCE=0
+  DRY_RUN=0
+  local with_cli=0
+  local passthrough=()
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --force) FORCE=1; shift ;;
+      --copy) MODE="copy"; shift ;;
+      --symlink) MODE="symlink"; shift ;;
+      --cli) with_cli=1; shift ;;
+      --dry-run) DRY_RUN=1; shift ;;
+      -h|--help) usage_install; return 0 ;;
+      --all|-a|--agent|--agent=*|[!-]*)
+        passthrough+=("$1")
+        # if --agent needs value, take next too
+        if [[ "$1" == "-a" || "$1" == "--agent" ]]; then
+          [[ $# -ge 2 ]] || die "$1 requires a value"
+          passthrough+=("$2")
+          shift 2
+        else
+          shift
+        fi
+        ;;
+      *)
+        die "unknown option: $1"
+        ;;
+    esac
+  done
+
+  select_agents_from_args "${passthrough[@]+"${passthrough[@]}"}"
+
+  log "Source: $SOURCE_REAL"
+  log "Mode:   $MODE"
+  log "Agents: ${SELECTED_AGENTS[*]}"
+  log ""
+
+  local a dest
+  for a in "${SELECTED_AGENTS[@]}"; do
+    log "==> $(agent_label "$a") [$a]"
+    while IFS= read -r dest; do
+      install_path "$dest"
+    done < <(agent_paths "$a")
+  done
+
+  if [[ "$with_cli" -eq 1 ]]; then
+    log ""
+    install_cli_shim
+  fi
+
+  log ""
+  log "Done."
+}
+
+cmd_uninstall() {
+  DRY_RUN=0
+  local with_cli=0
+  local passthrough=()
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --cli) with_cli=1; shift ;;
+      --dry-run) DRY_RUN=1; shift ;;
+      -h|--help) usage_uninstall; return 0 ;;
+      --all|-a|--agent|--agent=*|[!-]*)
+        passthrough+=("$1")
+        if [[ "$1" == "-a" || "$1" == "--agent" ]]; then
+          [[ $# -ge 2 ]] || die "$1 requires a value"
+          passthrough+=("$2")
+          shift 2
+        else
+          shift
+        fi
+        ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+
+  select_agents_from_args "${passthrough[@]+"${passthrough[@]}"}"
+
+  local a dest
+  for a in "${SELECTED_AGENTS[@]}"; do
+    log "==> $(agent_label "$a") [$a]"
+    while IFS= read -r dest; do
+      uninstall_path "$dest"
+    done < <(agent_paths "$a")
+  done
+
+  if [[ "$with_cli" -eq 1 ]]; then
+    uninstall_cli_shim
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# update / publish
+# ---------------------------------------------------------------------------
+
+git_in_repo() {
+  git -C "$REPO_ROOT" "$@"
+}
+
+cmd_update() {
+  DRY_RUN=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --dry-run) DRY_RUN=1; shift ;;
+      -h|--help) usage_update; return 0 ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+
+  git_in_repo remote get-url origin >/dev/null 2>&1 || die "no git remote 'origin' (push repo to GitHub first)"
+
+  local branch
+  branch="$(git_in_repo rev-parse --abbrev-ref HEAD)"
+  log "Repo:   $REPO_ROOT"
+  log "Branch: $branch"
+
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    log "DRY-RUN: git fetch origin"
+    log "DRY-RUN: git pull --ff-only origin $branch"
+    return 0
+  fi
+
+  if [[ -n "$(git_in_repo status --porcelain)" ]]; then
+    die "working tree dirty; commit/stash first or use publish"
+  fi
+
+  git_in_repo fetch origin
+  git_in_repo pull --ff-only origin "$branch"
+  log "Updated."
+  log "Symlinks already point at AGENTS.md; no reinstall needed."
+}
+
+cmd_publish() {
+  local message="" branch="" base="main" draft=0 no_pr=0 no_commit=0 DRY_RUN=0
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -m|--message)
+        [[ $# -ge 2 ]] || die "$1 requires a value"
+        message="$2"
+        shift 2
+        ;;
+      --message=*)
+        message="${1#--message=}"
+        shift
+        ;;
+      -b|--branch)
+        [[ $# -ge 2 ]] || die "$1 requires a value"
+        branch="$2"
+        shift 2
+        ;;
+      --branch=*)
+        branch="${1#--branch=}"
+        shift
+        ;;
+      --base)
+        [[ $# -ge 2 ]] || die "$1 requires a value"
+        base="$2"
+        shift 2
+        ;;
+      --base=*)
+        base="${1#--base=}"
+        shift
+        ;;
+      --draft) draft=1; shift ;;
+      --no-pr) no_pr=1; shift ;;
+      --no-commit) no_commit=1; shift ;;
+      --dry-run) DRY_RUN=1; shift ;;
+      -h|--help) usage_publish; return 0 ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+
+  git_in_repo remote get-url origin >/dev/null 2>&1 || die "no git remote 'origin'"
+
+  if [[ "$no_commit" -eq 0 ]]; then
+    # Must have AGENTS.md changes (or already staged)
+    local dirty
+    dirty="$(git_in_repo status --porcelain -- AGENTS.md)"
+    if [[ -z "$dirty" ]]; then
+      # allow other tracked changes only if user already committed? if nothing for AGENTS.md:
+      if [[ -z "$(git_in_repo status --porcelain)" ]]; then
+        die "nothing to publish (working tree clean)"
+      fi
+      die "AGENTS.md has no local changes; publish is for rule updates"
+    fi
+    [[ -n "$message" ]] || die "commit message required: -m \"...\""
+  else
+    [[ -n "$message" ]] || message="Update AGENTS.md"
+  fi
+
+  if [[ -z "$branch" ]]; then
+    branch="rules/update-$(date +%Y%m%d-%H%M%S)"
+  fi
+
+  log "Repo:    $REPO_ROOT"
+  log "Branch:  $branch"
+  log "Base:    $base"
+  log "Message: $message"
+
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    log "DRY-RUN: checkout -B $branch"
+    [[ "$no_commit" -eq 0 ]] && log "DRY-RUN: commit AGENTS.md"
+    log "DRY-RUN: push -u origin $branch"
+    [[ "$no_pr" -eq 0 ]] && log "DRY-RUN: gh pr create --base $base"
+    return 0
+  fi
+
+  # Stay on / create branch from current HEAD
+  local current
+  current="$(git_in_repo rev-parse --abbrev-ref HEAD)"
+  if [[ "$current" != "$branch" ]]; then
+    git_in_repo checkout -B "$branch"
+  fi
+
+  if [[ "$no_commit" -eq 0 ]]; then
+    git_in_repo add AGENTS.md
+    # refuse if commit would use weird env — rely on global author only
+    if git_in_repo config --local --get user.name >/dev/null 2>&1 \
+      || git_in_repo config --local --get user.email >/dev/null 2>&1; then
+      die "local git user.name/email is set; remove it (use global author only)"
+    fi
+    git_in_repo commit -m "$message"
+  fi
+
+  git_in_repo push -u origin "$branch"
+
+  if [[ "$no_pr" -eq 1 ]]; then
+    log "Pushed $branch (no PR)."
+    return 0
+  fi
+
+  command -v gh >/dev/null 2>&1 || die "gh not found; install GitHub CLI or use --no-pr"
+
+  local pr_args=(pr create --base "$base" --head "$branch" --title "$message" --body "## Summary
+
+Update shared global coding-agent rules (\`AGENTS.md\`).
+
+## Test plan
+- [ ] \`ho-rules status\` on a machine after merge + \`ho-rules update\`
+")
+  if [[ "$draft" -eq 1 ]]; then
+    pr_args+=(--draft)
+  fi
+
+  gh -R "$(git_in_repo remote get-url origin | sed -E 's#.*github.com[:/](.+)(\.git)?#\1#; s/\.git$//')" \
+    "${pr_args[@]}" 2>/dev/null \
+    || gh "${pr_args[@]}"
+
+  log "Done."
+}
+
+cmd_path() {
+  printf '%s\n' "$REPO_ROOT"
+}
+
+cmd_version() {
+  local rev
+  rev="$(git_in_repo rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  log "ho-rules @ $rev"
+  log "repo: $REPO_ROOT"
+}
+
+cmd_help() {
+  if [[ $# -eq 0 ]]; then
+    usage_root
+    return 0
+  fi
+  case "$1" in
+    install) usage_install ;;
+    uninstall) usage_uninstall ;;
+    publish) usage_publish ;;
+    update) usage_update ;;
+    status|list|path|version) log "Usage: ho-rules $1" ;;
+    *) die "unknown command: $1" ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# main
+# ---------------------------------------------------------------------------
+
+main() {
+  if [[ $# -eq 0 ]]; then
+    usage_root
+    exit 1
+  fi
+
+  local cmd="$1"
+  shift
+
+  case "$cmd" in
+    install) cmd_install "$@" ;;
+    uninstall) cmd_uninstall "$@" ;;
+    status) cmd_status "$@" ;;
+    list) cmd_list "$@" ;;
+    update) cmd_update "$@" ;;
+    publish) cmd_publish "$@" ;;
+    path) cmd_path "$@" ;;
+    version) cmd_version "$@" ;;
+    help|-h|--help) cmd_help "$@" ;;
+    *)
+      die "unknown command: $cmd (run: ho-rules help)"
+      ;;
+  esac
+}
+
+main "$@"
