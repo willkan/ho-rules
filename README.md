@@ -2,9 +2,34 @@
 
 [English](README.md) | [中文](README.zh-CN.md)
 
-Shared global rules across machines and coding agents. The single source of truth is this repo’s `AGENTS.md`.
+A small toolkit to keep **one** `AGENTS.md` as the source of truth and symlink it into the global paths that common coding agents read.
 
 Repository: `git@github.com:willkan/ho-rules.git`
+
+## Use your own rules (recommended)
+
+The `AGENTS.md` in this repo is **my** working rules, not a universal standard. For your own setup:
+
+1. **Fork** this repository on GitHub.
+2. Edit `AGENTS.md` in your fork to match how you want agents to behave.
+3. Install from **your fork** (not this upstream), then keep iterating on your fork.
+
+```bash
+# After forking to github.com/<you>/ho-rules
+git clone git@github.com:<you>/ho-rules.git ~/dev/ho-rules
+cd ~/dev/ho-rules
+# edit AGENTS.md
+./ho-rules install --all --force --cli
+```
+
+Or with curl bootstrap against your fork’s raw URL / SSH remote:
+
+```bash
+HO_RULES_REPO=git@github.com:<you>/ho-rules.git \
+  curl -fsSL https://raw.githubusercontent.com/<you>/ho-rules/main/bootstrap.sh | bash -s -- --all
+```
+
+Upstream here is mainly the **CLI + install layout**. Treat rule text as personal; pull tooling fixes from upstream if you want, keep `AGENTS.md` on your fork.
 
 Unified CLI:
 
@@ -15,6 +40,8 @@ ho-rules <command>
 ## One-line install (curl)
 
 By default this only installs the **`ho-rules` CLI entry** (symlink into `~/dev/bin` or `~/.local/bin`) and places the repo at `~/dev/ho-rules`.
+
+Prefer installing from **your fork**. The examples below use this repo’s URLs; replace `willkan` with your GitHub user after forking.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash
@@ -37,7 +64,7 @@ curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `HO_RULES_HOME` | `~/dev/ho-rules` | Local repo path |
-| `HO_RULES_REPO` | `git@github.com:willkan/ho-rules.git` | Git remote URL |
+| `HO_RULES_REPO` | `git@github.com:willkan/ho-rules.git` | Git remote URL (set to your fork) |
 | `HO_RULES_REF` | `main` | Branch / tag |
 
 Example:
@@ -61,7 +88,7 @@ Ensure `~/dev/bin` (or `~/.local/bin`) is on your `PATH`.
 ## Manual install
 
 ```bash
-git clone git@github.com:willkan/ho-rules.git ~/dev/ho-rules
+git clone git@github.com:willkan/ho-rules.git ~/dev/ho-rules   # or your fork
 cd ~/dev/ho-rules
 
 # CLI only

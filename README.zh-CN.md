@@ -2,9 +2,34 @@
 
 [English](README.md) | [中文](README.zh-CN.md)
 
-跨机器、跨 coding agent 共用的全局规则。**唯一真相**是本仓库的 `AGENTS.md`。
+用**一份** `AGENTS.md` 作为正式真相，软链到各主流 coding agent 会读的全局规则路径。
 
 仓库地址：`git@github.com:willkan/ho-rules.git`
+
+## 用自己的规则（推荐）
+
+本仓库里的 `AGENTS.md` 是**我的**工作约定，不是通用标准。你自己用时建议：
+
+1. 在 GitHub 上 **Fork** 本仓库。
+2. 在你的 fork 里改 `AGENTS.md`，写成你想要的 agent 行为。
+3. **从你的 fork 安装**（不要长期跟我这份规则），并在自己的 fork 上持续迭代。
+
+```bash
+# fork 到 github.com/<you>/ho-rules 之后
+git clone git@github.com:<you>/ho-rules.git ~/dev/ho-rules
+cd ~/dev/ho-rules
+# 编辑 AGENTS.md
+./ho-rules install --all --force --cli
+```
+
+或对你的 fork 跑 curl bootstrap：
+
+```bash
+HO_RULES_REPO=git@github.com:<you>/ho-rules.git \
+  curl -fsSL https://raw.githubusercontent.com/<you>/ho-rules/main/bootstrap.sh | bash -s -- --all
+```
+
+上游主要提供 **CLI 与安装布局**；规则正文按个人资产维护。需要工具修复时再从上游同步，`AGENTS.md` 留在自己的 fork。
 
 统一入口：
 
@@ -15,6 +40,8 @@ ho-rules <command>
 ## 一键安装（curl）
 
 默认只安装 **`ho-rules` CLI 入口**（软链到 `~/dev/bin` 或 `~/.local/bin`），并把仓库放到 `~/dev/ho-rules`。
+
+**更推荐从你的 fork 安装。** 下面示例用的是本仓库 URL；fork 后把 `willkan` 换成你的 GitHub 用户名。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash
@@ -37,7 +64,7 @@ curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh 
 | 变量 | 默认 | 说明 |
 |------|------|------|
 | `HO_RULES_HOME` | `~/dev/ho-rules` | 本地仓库路径 |
-| `HO_RULES_REPO` | `git@github.com:willkan/ho-rules.git` | git remote URL |
+| `HO_RULES_REPO` | `git@github.com:willkan/ho-rules.git` | git remote（请改成你的 fork） |
 | `HO_RULES_REF` | `main` | 分支 / tag |
 
 示例：
@@ -61,7 +88,7 @@ ho-rules status
 ## 手动安装
 
 ```bash
-git clone git@github.com:willkan/ho-rules.git ~/dev/ho-rules
+git clone git@github.com:willkan/ho-rules.git ~/dev/ho-rules   # 或你的 fork
 cd ~/dev/ho-rules
 
 # 仅 CLI 入口
