@@ -74,28 +74,21 @@ HO_RULES_HOME=~/src/ho-rules HO_RULES_REF=main \
   curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash -s -- --cli --force
 ```
 
-安装后确认（`curl | bash` 刚结束时当前 shell 里可能暂时没有 `ho-rules`，这是预期行为）：
+bootstrap 会按 `$SHELL` **直接写入** 其中一个文件：
+
+- zsh → `~/.zshrc`
+- bash → `~/.bash_profile`
+
+装完后按提示执行：
 
 ```bash
-# 始终可用：
-~/dev/bin/ho-rules version    # 或 ~/.local/bin/ho-rules
-# PATH 就绪 / 新开终端后：
+source ~/.zshrc          # 或: source ~/.bash_profile
+# 或者新开一个终端窗口
 ho-rules version
 ho-rules status
 ```
 
-**为什么 curl 装完不能立刻敲 `ho-rules`：** 安装只是在 `~/dev/bin` 或 `~/.local/bin` 建软链；`curl | bash` 无法改你当前交互 shell 的 `PATH`。
-
-若该目录不在 `PATH` 上，安装会**主动提示**是否写入 `~/.zshrc` 或 `~/.bash_profile`（按 `$SHELL` 选择）。确认 `Y` 后写入一行 `export PATH=...`。新开终端或 `source` 该文件即可。
-
-当前 shell 临时可用（不改 rc）：
-
-```bash
-export PATH="$HOME/dev/bin:$HOME/.local/bin:$PATH" && hash -r
-ho-rules help
-```
-
-非交互自动确认：`ho-rules install --cli --force -y`
+`curl | bash` 改不了当前交互 shell 的环境，所以需要 `source` 一次或开新窗口。
 
 ---
 

@@ -74,28 +74,16 @@ HO_RULES_HOME=~/src/ho-rules HO_RULES_REF=main \
   curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash -s -- --cli --force
 ```
 
-Verify (same shell right after `curl | bash` may not find `ho-rules` yet — that is expected):
+After bootstrap, PATH is written into **`~/.zshrc`** (zsh) or **`~/.bash_profile`** (bash). The install log tells you to:
 
 ```bash
-# always works:
-~/dev/bin/ho-rules version    # or ~/.local/bin/ho-rules
-# after PATH is set / new terminal:
+source ~/.zshrc          # or: source ~/.bash_profile
+# or open a new terminal
 ho-rules version
 ho-rules status
 ```
 
-**Why `ho-rules` is not immediate after curl:** the installer only creates a symlink under `~/dev/bin` or `~/.local/bin`. `curl | bash` cannot change your current interactive shell’s `PATH`.
-
-If that directory is not on `PATH`, install **prompts** you to append one line to `~/.zshrc` or `~/.bash_profile` (detected from `$SHELL`). Confirm with `Y`. Then open a new terminal, or `source` that file.
-
-This shell only (no rc change yet):
-
-```bash
-export PATH="$HOME/dev/bin:$HOME/.local/bin:$PATH" && hash -r
-ho-rules help
-```
-
-Non-interactive auto-confirm: `ho-rules install --cli --force -y`
+`curl | bash` cannot change your current shell’s environment; `source` / new window is required once.
 
 ---
 

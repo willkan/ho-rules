@@ -78,8 +78,44 @@ fi
 log "==> installing CLI entry"
 "${HO_RULES_HOME}/ho-rules" install "${INSTALL_ARGS[@]}"
 
+# Resolve where the shim landed (same rules as ho-rules).
+bin_dir=""
+for cand in "${HOME}/dev/bin" "${HOME}/.local/bin" "${HOME}/bin"; do
+  case ":${PATH}:" in
+    *":${cand}:"*) bin_dir="$cand"; break ;;
+  esac
+done
+if [[ -z "$bin_dir" ]]; then
+  if [[ -d "${HOME}/dev/bin" ]]; then
+    bin_dir="${HOME}/dev/bin"
+  else
+    bin_dir="${HOME}/.local/bin"
+  fi
+fi
+dest="${bin_dir}/ho-rules"
+
+# Shell rc: only ~/.zshrc or ~/.bash_profile
+case "${SHELL:-}" in
+  */bash) shell_rc="${HOME}/.bash_profile" ;;
+  *) shell_rc="${HOME}/.zshrc" ;;
+esac
+marker="# ho-rules PATH"
+path_line="export PATH=\"${bin_dir}:\$PATH\""
+
 log ""
-log "Done."
-log "If prompted, confirm writing PATH to ~/.zshrc or ~/.bash_profile."
-log "curl|bash cannot change this shell's PATH; after confirming, open a new"
-log "terminal or: source ~/.zshrc   # or ~/.bash_profile"
+log "==> shell PATH (${shell_rc})"
+if [[ -f "$shell_rc" ]] && grep -F "$marker" "$shell_rc" >/dev/null 2>&1; then
+  log "  already configured"
+else
+  printf '\n%s\n%s\n' "$marker" "$path_line" >>"$shell_rc"
+  log "  wrote: $path_line"
+fi
+
+log ""
+log "Done. CLI: ${dest}"
+log ""
+log "Enable in this shell (pick one):"
+log "  source ${shell_rc}"
+log "  # or open a new terminal window"
+log ""
+log "Then: ho-rules help"

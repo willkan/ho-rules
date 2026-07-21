@@ -187,7 +187,6 @@ Options:
   --force               Backup and replace existing targets
   --copy                Copy instead of symlink (not recommended)
   --cli                 Install ho-rules into PATH (~/dev/bin or ~/.local/bin)
-  -y, --yes             Auto-confirm shell rc PATH write (non-interactive)
   --dry-run             Print actions only
   -h, --help            Show help
 EOF
@@ -360,54 +359,16 @@ path_contains_dir() {
   esac
 }
 
-# Primary rc to edit for PATH (zsh -> .zshrc, bash -> .bash_profile).
+# Only these two: zsh -> ~/.zshrc, bash -> ~/.bash_profile
 primary_shell_rc() {
   case "${SHELL:-}" in
-    */zsh)
-      printf '%s\n' "${HOME}/.zshrc"
-      ;;
-    */bash)
-      # macOS login bash reads .bash_profile; prefer it when present or as default create target.
-      if [[ -f "${HOME}/.bash_profile" || ! -f "${HOME}/.bashrc" ]]; then
-        printf '%s\n' "${HOME}/.bash_profile"
-      else
-        printf '%s\n' "${HOME}/.bashrc"
-      fi
-      ;;
-    *)
-      if [[ -f "${HOME}/.zshrc" ]]; then
-        printf '%s\n' "${HOME}/.zshrc"
-      elif [[ -f "${HOME}/.bash_profile" ]]; then
-        printf '%s\n' "${HOME}/.bash_profile"
-      elif [[ -f "${HOME}/.bashrc" ]]; then
-        printf '%s\n' "${HOME}/.bashrc"
-      else
-        printf '%s\n' "${HOME}/.zshrc"
-      fi
-      ;;
+    */bash) printf '%s\n' "${HOME}/.bash_profile" ;;
+    *) printf '%s\n' "${HOME}/.zshrc" ;;
   esac
 }
 
-prompt_yes_no() {
-  # $1 = prompt text (default Yes). Reads from /dev/tty so curl|bash can still ask.
-  local prompt="$1"
-  local ans=""
-  if [[ "${YES:-0}" -eq 1 ]]; then
-    return 0
-  fi
-  if [[ ! -r /dev/tty ]]; then
-    return 1
-  fi
-  printf '%s' "$prompt" > /dev/tty
-  # shellcheck disable=SC2162
-  read -r ans < /dev/tty || return 1
-  case "${ans:-Y}" in
-    ""|Y|y|yes|YES) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
-# Ask before writing PATH into shell rc. Idempotent via marker comment.
+# Append PATH export to ~/.zshrc or ~/.bash_profile (idempotent). No prompt.
+# Callers should tell the user to source or open a new terminal.
 ensure_bin_dir_on_path_rc() {
   local bin_dir="$1"
   local marker="# ho-rules PATH"
@@ -418,54 +379,49 @@ ensure_bin_dir_on_path_rc() {
   block="$(printf '\n%s\n%s\n' "$marker" "$line")"
 
   if [[ -f "$rc" ]] && grep -F "$marker" "$rc" >/dev/null 2>&1; then
-    log "  PATH already configured in $rc"
+    log "  PATH already in $rc"
+    printf '%s\n' "$rc"
     return 0
   fi
-
-  log ""
-  log "  ${bin_dir} is not on your PATH."
-  log "  To make \`ho-rules\` available in new terminals, add to ${rc}:"
-  log ""
-  log "    ${line}"
-  log ""
 
   if [[ "${DRY_RUN:-0}" -eq 1 ]]; then
-    log "  DRY-RUN: would append the above to $rc after confirmation"
-    return 0
-  fi
-
-  if ! prompt_yes_no "  Write this to ${rc}? [Y/n] "; then
-    log "  skipped shell rc update"
-    log "  You can add it later, or run for this shell only:"
-    log "    export PATH=\"${bin_dir}:\$PATH\" && hash -r"
+    log "  DRY-RUN: append PATH to $rc"
+    printf '%s\n' "$rc"
     return 0
   fi
 
   if [[ ! -f "$rc" ]]; then
     printf '%s\n' "$block" >"$rc"
+    log "  created $rc with PATH for ${bin_dir}"
   else
     printf '%s\n' "$block" >>"$rc"
+    log "  appended PATH to $rc"
   fi
-  log "  updated: $rc"
-  log "  open a new terminal, or: source $rc"
+  printf '%s\n' "$rc"
 }
 
 print_cli_usage_hints() {
   local bin_dir="$1"
   local dest="${bin_dir}/ho-rules"
+  local rc="${2:-}"
   log ""
-  log "  Immediate use (this shell / after curl | bash):"
+  log "  Run now:"
   log "    ${dest} help"
   if path_contains_dir "$bin_dir"; then
     log "    ho-rules help"
+  elif [[ -n "$rc" ]]; then
+    log ""
+    log "  Then enable \`ho-rules\` in this shell:"
+    log "    source ${rc}"
+    log "  or open a new terminal window."
   else
-    log "  This shell only (until you open a new terminal):"
+    log "  This shell:"
     log "    export PATH=\"${bin_dir}:\$PATH\" && hash -r && ho-rules help"
   fi
 }
 
 install_cli_shim() {
-  local bin_dir dest
+  local bin_dir dest rc=""
   bin_dir="$(default_cli_bin_dir)"
   dest="${bin_dir}/ho-rules"
   log "==> CLI shim"
@@ -480,9 +436,9 @@ install_cli_shim() {
     if [[ "$t" == "$REPO_ROOT/ho-rules" ]]; then
       log "  already linked -> skip"
       if ! path_contains_dir "$bin_dir"; then
-        ensure_bin_dir_on_path_rc "$bin_dir"
+        rc="$(ensure_bin_dir_on_path_rc "$bin_dir")"
       fi
-      print_cli_usage_hints "$bin_dir"
+      print_cli_usage_hints "$bin_dir" "$rc"
       return 0
     fi
   fi
@@ -501,9 +457,9 @@ install_cli_shim() {
     log "  linked"
   fi
   if ! path_contains_dir "$bin_dir"; then
-    ensure_bin_dir_on_path_rc "$bin_dir"
+    rc="$(ensure_bin_dir_on_path_rc "$bin_dir")"
   fi
-  print_cli_usage_hints "$bin_dir"
+  print_cli_usage_hints "$bin_dir" "$rc"
 }
 
 uninstall_cli_shim() {
@@ -632,7 +588,6 @@ cmd_install() {
   MODE="symlink"
   FORCE=0
   DRY_RUN=0
-  YES=0
   local with_cli=0
   local passthrough=()
 
@@ -642,7 +597,6 @@ cmd_install() {
       --copy) MODE="copy"; shift ;;
       --symlink) MODE="symlink"; shift ;;
       --cli) with_cli=1; shift ;;
-      -y|--yes) YES=1; shift ;;
       --dry-run) DRY_RUN=1; shift ;;
       -h|--help) usage_install; return 0 ;;
       --all|-a|--agent|--agent=*|[!-]*)
