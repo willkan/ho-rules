@@ -12,7 +12,8 @@
 #     | base64 --decode | bash -s -- --all
 #   # or:
 #   curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" \
-#     https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash
+#     -H "Accept: application/vnd.github.raw" \
+#     https://api.github.com/repos/willkan/ho-rules/contents/bootstrap.sh | bash
 #
 # Env:
 #   HO_RULES_HOME   install dir (default: ~/dev/ho-rules)
@@ -33,11 +34,9 @@ need() {
 
 need git
 
-INSTALL_ARGS=(--cli --force)
 # Default: only CLI entry. Pass --all / -a / agent ids to also link agents.
-if [[ $# -eq 0 ]]; then
-  :
-else
+INSTALL_ARGS=(--cli --force)
+if [[ $# -gt 0 ]]; then
   INSTALL_ARGS+=("$@")
 fi
 
@@ -48,30 +47,43 @@ log "  ref:  $HO_RULES_REF"
 log ""
 
 if [[ -d "${HO_RULES_HOME}/.git" ]]; then
-  log "==> updating existing clone"
-  git -C "$HO_RULES_HOME" remote get-url origin >/dev/null 2>&1 \
-    || git -C "$HO_RULES_HOME" remote add origin "$HO_RULES_REPO"
-  # Prefer configured origin; do not force-overwrite remote URL unless empty
-  git -C "$HO_RULES_HOME" fetch --quiet origin "$HO_RULES_REF"
-  if [[ -n "$(git -C "$HO_RULES_HOME" status --porcelain)" ]]; then
-    die "working tree dirty at $HO_RULES_HOME; commit/stash or set a clean HO_RULES_HOME"
+  log "==> existing clone"
+  if git -C "$HO_RULES_HOME" remote get-url origin >/dev/null 2>&1; then
+    if git -C "$HO_RULES_HOME" fetch --quiet origin "$HO_RULES_REF" 2>/dev/null; then
+      if [[ -n "$(git -C "$HO_RULES_HOME" status --porcelain)" ]]; then
+        log "  working tree dirty; skip pull, install from local"
+      else
+        if git -C "$HO_RULES_HOME" rev-parse --verify "origin/${HO_RULES_REF}" >/dev/null 2>&1; then
+          git -C "$HO_RULES_HOME" checkout --quiet "$HO_RULES_REF" 2>/dev/null \
+            || git -C "$HO_RULES_HOME" checkout --quiet -B "$HO_RULES_REF" "origin/${HO_RULES_REF}"
+          if git -C "$HO_RULES_HOME" pull --ff-only --quiet origin "$HO_RULES_REF" 2>/dev/null; then
+            log "  updated to origin/${HO_RULES_REF}"
+          else
+            log "  could not ff-only pull; using local tree"
+          fi
+        else
+          log "  origin/${HO_RULES_REF} missing; using local tree"
+        fi
+      fi
+    else
+      log "  fetch failed (offline or remote empty); using local tree"
+    fi
+  else
+    log "  no origin remote; using local tree"
   fi
-  git -C "$HO_RULES_HOME" checkout --quiet "$HO_RULES_REF"
-  git -C "$HO_RULES_HOME" pull --ff-only --quiet origin "$HO_RULES_REF" \
-    || git -C "$HO_RULES_HOME" reset --hard "origin/${HO_RULES_REF}"
 else
   if [[ -e "$HO_RULES_HOME" ]]; then
     die "path exists but is not a git repo: $HO_RULES_HOME"
   fi
   log "==> cloning"
   mkdir -p "$(dirname "$HO_RULES_HOME")"
-  git clone --branch "$HO_RULES_REF" --single-branch "$HO_RULES_REPO" "$HO_RULES_HOME"
+  git clone --branch "$HO_RULES_REF" --single-branch "$HO_RULES_REPO" "$HO_RULES_HOME" \
+    || die "clone failed; check HO_RULES_REPO / credentials (private repos need SSH or gh auth)"
 fi
 
 [[ -x "${HO_RULES_HOME}/ho-rules" ]] || die "ho-rules entry missing after clone: ${HO_RULES_HOME}/ho-rules"
 
 log "==> installing CLI entry"
-# shellcheck disable=SC2086
 "${HO_RULES_HOME}/ho-rules" install "${INSTALL_ARGS[@]}"
 
 bin_dir="${HOME}/dev/bin"
