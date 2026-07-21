@@ -154,9 +154,10 @@ Commands:
   help        Show this help or command help
 
 Examples:
-  ho-rules install --all --force
+  curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash
+  ho-rules install --cli --force
+  ho-rules install --all --force --cli
   ho-rules install -a codex,claude,grok
-  ho-rules install codex cursor --force
   ho-rules update
   ho-rules publish -m "tighten fallback policy"
   ho-rules status
@@ -173,14 +174,19 @@ Symlink this repo's AGENTS.md into selected agent global paths.
 Default mode is always symlink. Prefer --force on first install.
 
 Agent selection (any of):
-  --all                 Install all known agents (default if none given)
+  --all                 Install all known agents
   -a, --agent <id>      Agent id or comma-separated list (repeatable)
   <id> ...              Positional agent ids
+
+Defaults:
+  (no agents, no --cli)   -> all agents
+  --cli only              -> CLI entry only (used by bootstrap)
+  --all --cli             -> all agents + CLI
 
 Options:
   --force               Backup and replace existing targets
   --copy                Copy instead of symlink (not recommended)
-  --cli                 Also install ho-rules into PATH (~/dev/bin or ~/.local/bin)
+  --cli                 Install ho-rules into PATH (~/dev/bin or ~/.local/bin)
   --dry-run             Print actions only
   -h, --help            Show help
 EOF
@@ -441,27 +447,29 @@ points_at_source_cli() {
   [[ "$target" == "$REPO_ROOT/ho-rules" ]]
 }
 
+# Sets SELECTED_AGENTS and AGENTS_EXPLICIT (1 if --all / -a / positional agents given).
 select_agents_from_args() {
-  # Sets global SELECTED_AGENTS array. Consumes remaining "$@".
-  # Call after parsing known flags into leftover args.
   SELECTED_AGENTS=()
+  AGENTS_EXPLICIT=0
   local want_all=0
   local raw_agents=()
-  local arg
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --all)
         want_all=1
+        AGENTS_EXPLICIT=1
         shift
         ;;
       -a|--agent)
         [[ $# -ge 2 ]] || die "$1 requires a value"
         raw_agents+=("$2")
+        AGENTS_EXPLICIT=1
         shift 2
         ;;
       --agent=*)
         raw_agents+=("${1#--agent=}")
+        AGENTS_EXPLICIT=1
         shift
         ;;
       -*)
@@ -469,21 +477,28 @@ select_agents_from_args() {
         ;;
       *)
         raw_agents+=("$1")
+        AGENTS_EXPLICIT=1
         shift
         ;;
     esac
   done
 
-  if [[ "$want_all" -eq 1 || ${#raw_agents[@]} -eq 0 ]]; then
+  if [[ "$want_all" -eq 1 ]]; then
     SELECTED_AGENTS=("${ALL_AGENTS[@]}")
     return 0
   fi
 
-  local line
-  while IFS= read -r line; do
-    [[ -n "$line" ]] && SELECTED_AGENTS+=("$line")
-  done < <(printf '%s\n' "${raw_agents[@]}" | parse_agent_list)
-  [[ ${#SELECTED_AGENTS[@]} -gt 0 ]] || die "no agents selected"
+  if [[ ${#raw_agents[@]} -gt 0 ]]; then
+    local line
+    while IFS= read -r line; do
+      [[ -n "$line" ]] && SELECTED_AGENTS+=("$line")
+    done < <(printf '%s\n' "${raw_agents[@]}" | parse_agent_list)
+    [[ ${#SELECTED_AGENTS[@]} -gt 0 ]] || die "no agents selected"
+    return 0
+  fi
+
+  # No explicit agent selection: caller decides default (all vs none).
+  SELECTED_AGENTS=()
 }
 
 cmd_install() {
@@ -521,13 +536,34 @@ cmd_install() {
 
   select_agents_from_args "${passthrough[@]+"${passthrough[@]}"}"
 
+  # Defaults:
+  #   ho-rules install              -> all agents
+  #   ho-rules install --cli        -> CLI only (bootstrap-friendly)
+  #   ho-rules install --all --cli  -> all agents + CLI
+  #   ho-rules install -a codex     -> selected agents
+  if [[ "$AGENTS_EXPLICIT" -eq 0 ]]; then
+    if [[ "$with_cli" -eq 1 ]]; then
+      SELECTED_AGENTS=()
+    else
+      SELECTED_AGENTS=("${ALL_AGENTS[@]}")
+    fi
+  fi
+
+  if [[ ${#SELECTED_AGENTS[@]} -eq 0 && "$with_cli" -eq 0 ]]; then
+    die "nothing to install; pass agents, --all, or --cli"
+  fi
+
   log "Source: $SOURCE_REAL"
   log "Mode:   $MODE"
-  log "Agents: ${SELECTED_AGENTS[*]}"
+  if [[ ${#SELECTED_AGENTS[@]} -gt 0 ]]; then
+    log "Agents: ${SELECTED_AGENTS[*]}"
+  else
+    log "Agents: (none)"
+  fi
   log ""
 
   local a dest
-  for a in "${SELECTED_AGENTS[@]}"; do
+  for a in "${SELECTED_AGENTS[@]+"${SELECTED_AGENTS[@]}"}"; do
     log "==> $(agent_label "$a") [$a]"
     while IFS= read -r dest; do
       install_path "$dest"
@@ -535,7 +571,7 @@ cmd_install() {
   done
 
   if [[ "$with_cli" -eq 1 ]]; then
-    log ""
+    [[ ${#SELECTED_AGENTS[@]} -gt 0 ]] && log ""
     install_cli_shim
   fi
 
@@ -569,8 +605,17 @@ cmd_uninstall() {
 
   select_agents_from_args "${passthrough[@]+"${passthrough[@]}"}"
 
+  # Defaults mirror install: bare uninstall -> all agents; --cli alone -> CLI only.
+  if [[ "$AGENTS_EXPLICIT" -eq 0 ]]; then
+    if [[ "$with_cli" -eq 1 ]]; then
+      SELECTED_AGENTS=()
+    else
+      SELECTED_AGENTS=("${ALL_AGENTS[@]}")
+    fi
+  fi
+
   local a dest
-  for a in "${SELECTED_AGENTS[@]}"; do
+  for a in "${SELECTED_AGENTS[@]+"${SELECTED_AGENTS[@]}"}"; do
     log "==> $(agent_label "$a") [$a]"
     while IFS= read -r dest; do
       uninstall_path "$dest"

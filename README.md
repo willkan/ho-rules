@@ -117,11 +117,12 @@ cd ~/dev/ho-rules
 ### install 选型
 
 ```bash
-ho-rules install --all --force          # 全部
+ho-rules install --cli --force          # 仅 CLI 入口（bootstrap 默认）
+ho-rules install --all --force          # 全部 agent
+ho-rules install --all --force --cli    # 全部 agent + CLI
 ho-rules install -a codex,claude        # 逗号分隔
 ho-rules install -a grok -a cursor      # 重复 -a
 ho-rules install codex gemini           # 位置参数
-ho-rules install --cli --force          # 额外安装 CLI 到 PATH
 ```
 
 默认始终是 **软链接**。只有环境不能 symlink 时才用 `--copy`（不推荐）。
