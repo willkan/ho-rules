@@ -168,3 +168,7 @@ Requires `origin` remote and authenticated `gh` when creating a PR.
 | `continue` | `~/.continue/config/AGENTS.md` |
 
 Edit only this repo’s `AGENTS.md`. Do not treat `~/.codex/...` (and similar) link targets as the source of truth.
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=willkan/ho-rules&type=Date)](https://www.star-history.com/#willkan/ho-rules&Date)

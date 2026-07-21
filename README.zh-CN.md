@@ -168,3 +168,7 @@ ho-rules publish -m "..." --no-pr    # 只推 branch
 | `continue` | `~/.continue/config/AGENTS.md` |
 
 只在本仓库改 `AGENTS.md`，不要在 `~/.codex/...` 等链接路径上直接当“源文件”维护。
+
+## Star 趋势
+
+[![Star History Chart](https://api.star-history.com/svg?repos=willkan/ho-rules&type=Date)](https://www.star-history.com/#willkan/ho-rules&Date)
