@@ -1,49 +1,51 @@
 # ho-rules
 
-跨机器、跨 coding agent 共用的全局规则。**唯一真相**是本仓库的 `AGENTS.md`。
+[English](README.md) | [中文](README.zh-CN.md)
 
-统一入口：
+Shared global rules across machines and coding agents. The single source of truth is this repo’s `AGENTS.md`.
+
+Unified CLI:
 
 ```bash
 ho-rules <command>
 ```
 
-## 一键安装（curl）
+## One-line install (curl)
 
-默认只安装 **`ho-rules` CLI 入口**（软链到 `~/dev/bin` 或 `~/.local/bin`），并把仓库放到 `~/dev/ho-rules`。
+By default this only installs the **`ho-rules` CLI entry** (symlink into `~/dev/bin` or `~/.local/bin`) and places the repo at `~/dev/ho-rules`.
 
-### 公开仓库
+### Public repository
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash
 ```
 
-同时挂上全部 agent 全局规则路径：
+Also link all agent global rule paths:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash -s -- --all
 ```
 
-只挂部分 agent：
+Selected agents only:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash -s -- -a codex,claude,grok
 ```
 
-### 私有仓库
+### Private repository
 
-`raw.githubusercontent.com` 需要带 token，或用 `gh` 拉脚本：
+`raw.githubusercontent.com` needs a token, or fetch the script with `gh`:
 
 ```bash
-# 推荐：已登录 gh
+# Recommended: authenticated gh
 gh api repos/willkan/ho-rules/contents/bootstrap.sh --jq .content \
   | base64 --decode | bash
 
-# 同时装全部 agent 链接
+# Also install all agent links
 gh api repos/willkan/ho-rules/contents/bootstrap.sh --jq .content \
   | base64 --decode | bash -s -- --all
 
-# 或 curl + token
+# Or curl + token
 curl -fsSL \
   -H "Authorization: Bearer $GITHUB_TOKEN" \
   -H "Accept: application/vnd.github.raw" \
@@ -51,96 +53,96 @@ curl -fsSL \
   | bash -s -- --all
 ```
 
-clone 仍走 `git`（SSH 或已配置的 HTTPS 凭证）。若默认 HTTPS 拉不下来，可指定 SSH：
+Clone still uses `git` (SSH or configured HTTPS credentials). If HTTPS clone fails, use SSH:
 
 ```bash
 HO_RULES_REPO=git@github.com:willkan/ho-rules.git \
   bash -c 'curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash'
 ```
 
-### 环境变量
+### Environment variables
 
-| 变量 | 默认 | 说明 |
-|------|------|------|
-| `HO_RULES_HOME` | `~/dev/ho-rules` | 本地仓库路径 |
-| `HO_RULES_REPO` | `https://github.com/willkan/ho-rules.git` | git remote URL |
-| `HO_RULES_REF` | `main` | 分支 / tag |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HO_RULES_HOME` | `~/dev/ho-rules` | Local repo path |
+| `HO_RULES_REPO` | `https://github.com/willkan/ho-rules.git` | Git remote URL |
+| `HO_RULES_REF` | `main` | Branch / tag |
 
-示例：
+Example:
 
 ```bash
 HO_RULES_HOME=~/src/ho-rules HO_RULES_REF=main \
   curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash -s -- --cli --force
 ```
 
-安装后确认：
+Verify:
 
 ```bash
 ho-rules version
 ho-rules status
 ```
 
-确保 `~/dev/bin`（或 `~/.local/bin`）在 `PATH` 中。
+Ensure `~/dev/bin` (or `~/.local/bin`) is on your `PATH`.
 
 ---
 
-## 手动安装
+## Manual install
 
 ```bash
 git clone https://github.com/willkan/ho-rules.git ~/dev/ho-rules
 cd ~/dev/ho-rules
 
-# 仅 CLI 入口
+# CLI only
 ./ho-rules install --cli --force
 
-# CLI + 全部 agent 路径
+# CLI + all agent paths
 ./ho-rules install --all --force --cli
 
-# 或只装部分
+# Selected agents
 ./ho-rules install -a codex,claude,grok --force
 ./ho-rules install codex cursor --force
 ```
 
-## 命令
+## Commands
 
-| 命令 | 说明 |
-|------|------|
-| `ho-rules install` | 软链 `AGENTS.md` 到 agent 全局路径（默认 symlink） |
-| `ho-rules uninstall` | 删除指向本仓库的软链 |
-| `ho-rules status` | 查看各路径安装状态 |
-| `ho-rules list` | 列出可选 agent id |
-| `ho-rules update` | `git pull --ff-only` 拉取最新规则 |
-| `ho-rules publish` | 提交 `AGENTS.md`、推 branch、开 PR |
-| `ho-rules path` | 打印仓库路径 |
-| `ho-rules help [cmd]` | 帮助 |
+| Command | Description |
+|---------|-------------|
+| `ho-rules install` | Symlink `AGENTS.md` into agent global paths (default: symlink) |
+| `ho-rules uninstall` | Remove symlinks that point at this repo |
+| `ho-rules status` | Show install status for each path |
+| `ho-rules list` | List available agent ids |
+| `ho-rules update` | `git pull --ff-only` latest rules |
+| `ho-rules publish` | Commit `AGENTS.md`, push branch, open PR |
+| `ho-rules path` | Print repo path |
+| `ho-rules help [cmd]` | Help |
 
-### install 选型
+### install selection
 
 ```bash
-ho-rules install --cli --force          # 仅 CLI 入口（bootstrap 默认）
-ho-rules install --all --force          # 全部 agent
-ho-rules install --all --force --cli    # 全部 agent + CLI
-ho-rules install -a codex,claude        # 逗号分隔
-ho-rules install -a grok -a cursor      # 重复 -a
-ho-rules install codex gemini           # 位置参数
+ho-rules install --cli --force          # CLI only (bootstrap default)
+ho-rules install --all --force          # all agents
+ho-rules install --all --force --cli    # all agents + CLI
+ho-rules install -a codex,claude        # comma-separated
+ho-rules install -a grok -a cursor      # repeated -a
+ho-rules install codex gemini           # positional
 ```
 
-默认始终是 **软链接**。只有环境不能 symlink 时才用 `--copy`（不推荐）。
+Default is always **symlink**. Use `--copy` only when symlinks are unavailable (not recommended).
 
-### 多机同步
+### Multi-machine sync
 
 ```bash
-# 机器 A：改规则并提 PR
+# Machine A: edit rules and open a PR
 cd ~/dev/ho-rules
 # edit AGENTS.md
 ho-rules publish -m "clarify git author policy"
 
-# 合并后，机器 B：
+# After merge, machine B:
 ho-rules update
-# 或重新跑 bootstrap（已有 clone 会 ff-only 更新）
+# or re-run bootstrap (existing clone ff-only updates)
 curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh | bash
 
-# symlink 已指向文件，pull 即生效
+# Symlinks already point at the file; pull is enough
 ```
 
 ### publish
@@ -149,14 +151,14 @@ curl -fsSL https://raw.githubusercontent.com/willkan/ho-rules/main/bootstrap.sh 
 ho-rules publish -m "update fallback policy"
 ho-rules publish -m "..." -b rules/my-topic --base main
 ho-rules publish -m "..." --draft
-ho-rules publish -m "..." --no-pr    # 只推 branch
+ho-rules publish -m "..." --no-pr    # push branch only
 ```
 
-需要 `origin` remote 和已登录的 `gh`（开 PR 时）。
+Requires `origin` remote and authenticated `gh` when creating a PR.
 
-## Agent 路径
+## Agent paths
 
-| id | 路径 |
+| id | Path |
 |----|------|
 | `codex` | `~/.codex/AGENTS.md` |
 | `claude` | `~/.claude/CLAUDE.md`, `~/.claude/AGENTS.md` |
@@ -166,12 +168,12 @@ ho-rules publish -m "..." --no-pr    # 只推 branch
 | `opencode` | `~/.config/opencode/AGENTS.md` |
 | `continue` | `~/.continue/config/AGENTS.md` |
 
-只在本仓库改 `AGENTS.md`，不要在 `~/.codex/...` 等链接路径上直接当“源文件”维护。
+Edit only this repo’s `AGENTS.md`. Do not treat `~/.codex/...` (and similar) link targets as the source of truth.
 
-## 发布到 GitHub
+## Publish to GitHub
 
 ```bash
 cd ~/dev/ho-rules
 gh repo create ho-rules --private --source=. --remote=origin --push
-# 公开则把 --private 换成 --public（curl raw 更方便）
+# Use --public instead of --private for easier curl raw install
 ```
