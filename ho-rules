@@ -368,25 +368,25 @@ primary_shell_rc() {
 }
 
 # Append PATH export to ~/.zshrc or ~/.bash_profile (idempotent). No prompt.
-# Callers should tell the user to source or open a new terminal.
+# Sets SHELL_RC_UPDATED to the rc path for caller messages.
 ensure_bin_dir_on_path_rc() {
   local bin_dir="$1"
   local marker="# ho-rules PATH"
   local rc line block
 
+  SHELL_RC_UPDATED=""
   rc="$(primary_shell_rc)"
   line="export PATH=\"${bin_dir}:\$PATH\""
   block="$(printf '\n%s\n%s\n' "$marker" "$line")"
+  SHELL_RC_UPDATED="$rc"
 
   if [[ -f "$rc" ]] && grep -F "$marker" "$rc" >/dev/null 2>&1; then
     log "  PATH already in $rc"
-    printf '%s\n' "$rc"
     return 0
   fi
 
   if [[ "${DRY_RUN:-0}" -eq 1 ]]; then
     log "  DRY-RUN: append PATH to $rc"
-    printf '%s\n' "$rc"
     return 0
   fi
 
@@ -397,7 +397,6 @@ ensure_bin_dir_on_path_rc() {
     printf '%s\n' "$block" >>"$rc"
     log "  appended PATH to $rc"
   fi
-  printf '%s\n' "$rc"
 }
 
 print_cli_usage_hints() {
@@ -421,9 +420,10 @@ print_cli_usage_hints() {
 }
 
 install_cli_shim() {
-  local bin_dir dest rc=""
+  local bin_dir dest
   bin_dir="$(default_cli_bin_dir)"
   dest="${bin_dir}/ho-rules"
+  SHELL_RC_UPDATED=""
   log "==> CLI shim"
   log "    $dest -> $REPO_ROOT/ho-rules"
   if [[ ! -d "$bin_dir" ]]; then
@@ -436,9 +436,9 @@ install_cli_shim() {
     if [[ "$t" == "$REPO_ROOT/ho-rules" ]]; then
       log "  already linked -> skip"
       if ! path_contains_dir "$bin_dir"; then
-        rc="$(ensure_bin_dir_on_path_rc "$bin_dir")"
+        ensure_bin_dir_on_path_rc "$bin_dir"
       fi
-      print_cli_usage_hints "$bin_dir" "$rc"
+      print_cli_usage_hints "$bin_dir" "${SHELL_RC_UPDATED:-}"
       return 0
     fi
   fi
@@ -457,9 +457,9 @@ install_cli_shim() {
     log "  linked"
   fi
   if ! path_contains_dir "$bin_dir"; then
-    rc="$(ensure_bin_dir_on_path_rc "$bin_dir")"
+    ensure_bin_dir_on_path_rc "$bin_dir"
   fi
-  print_cli_usage_hints "$bin_dir" "$rc"
+  print_cli_usage_hints "$bin_dir" "${SHELL_RC_UPDATED:-}"
 }
 
 uninstall_cli_shim() {
