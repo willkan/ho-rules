@@ -15,17 +15,17 @@
 
 可用时按下表在当前 agent 环境内选择 subagent；表中具体型号仅为能力档位示例，实际按当前运行时模型目录取同档最新模型，通用 skill 按所需能力选型，不绑定旧版本号。各列不是跨 CLI 的委派顺序；跨 CLI 委派按需使用 `agent-capability-router`。按实际质量调整；主会话已是顶级模型时，委派常规实现、检索或验证子 agent 必须显式选用常规执行或轻量档位，禁止默认继承顶级模型。
 
-| 任务 | Codex（模型 / 推理预算） | Agy（模型或含预算的模型 ID） | Claude（模型别名 / 推理预算） |
+| 任务 | Codex（模型系列 / 推理预算，取最新可用版本） | Agy（模型或含预算的模型 ID） | Claude（模型别名 / 推理预算） |
 | --- | --- | --- | --- |
-| 复杂归因、架构取舍 | `gpt-6-astra` / low | Carbon（ID 与预算以运行时为准） | `fable` / medium |
-| 老大难问题、反复修补仍不收敛、同类问题跨入口复发：重新归因并比较整体方案 | `gpt-6-astra` / low | Carbon（ID 与预算以运行时为准） | `fable` / medium |
-| 复杂实现、跨文件修复、端到端执行 | `gpt-6.1-sol` / medium | `gemini-4-argon-medium` | `opus` / medium |
-| 范围清楚的局部修复、UI/浏览器操作、验证 | `gpt-6.1-terra` / medium | `gemini-4-argon-low` | `sonnet` / medium |
-| 明确规则下的检索、提取、批量转换、机械修改 | `gpt-6-luna` / max | `gemini-3.8-flash-low` | `haiku` / low |
+| 复杂归因、架构取舍 | `astra`（最新） / xhigh | `gemini-4-carbon-xhigh`（无则取最高可用预算） | `fable` / medium |
+| 老大难问题、反复修补仍不收敛、同类问题跨入口复发：重新归因并比较整体方案 | `astra`（最新） / xhigh | `gemini-4-carbon-xhigh`（无则取最高可用预算） | `fable` / medium |
+| 复杂实现、跨文件修复、端到端执行 | `sol`（最新） / medium | `gemini-4-neon-high` | `opus` / medium |
+| 范围清楚的局部修复、UI/浏览器操作、验证 | `terra`（最新） / medium | `gemini-4-neon-medium` | `sonnet` / medium |
+| 明确规则下的检索、提取、批量转换、机械修改 | `luna`（最新） / max | `gemini-4-hydrogen-low` | `haiku` / low |
 
 使用前以当前工具支持的模型、别名和预算为准：Claude 优先使用跟随当前版本的别名；Agy 按模型目录选择包含预算的准确 ID，不将 Codex 的预算直接套用到其他环境。某个模型不支持预算设置时沿用其原生默认；不支持原生 subagent 或所列模型不可用时，由主 agent 继续处理，或按需选择已确认能力相当的可用模型，不为匹配表格自动启动其他 CLI。后续新模型按能力定位与实际质量替换，不仅凭版本号升级。
 
-Agy 顶级任务选择 Carbon，Argon high 不视为同档替代；若当前模型目录尚未提供 Carbon，不猜测其 ID 或预算，按上述不可用规则处理。老大难问题一行用于执行或调查任务的选型，不自动触发 advisor。
+Agy 顶级任务选择 `gemini-4-carbon`，`gemini-4-neon-high` 不视为同档替代；若当前模型目录尚未提供 `gemini-4-carbon`，不猜测其 ID 或预算，按上述不可用规则处理。老大难问题一行用于执行或调查任务的选型，不自动触发 advisor。
 
 - 委托保留用户原意与关键纠正，区分已核实事实、主 agent 假设和建议，不把自己的解读升级为用户要求。按任务不确定性与执行者能力决定细节：判断或独立评审不预设解法与检查清单；实现明确行为边界和验收目标；机械任务给精确规则。默认独立上下文，并发写入划清写集。
 - 用户要求时调用 advisor；否则仅在反复尝试仍无新进展、关键证据互相矛盾或重大取舍确需独立视角时，按全局 `advisor` skill 咨询。主执行者已是顶级模型时默认不自主调用；不因任务复杂或涉及架构就触发。普通实现、验收、提交或发布不自动复审；建议由主执行者核实处理，不循环求一致或将其变成审批门槛。
