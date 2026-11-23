@@ -26,7 +26,7 @@ SOURCE_REAL="${REPO_ROOT}/AGENTS.md"
 # Agent registry
 # ---------------------------------------------------------------------------
 
-ALL_AGENTS=(codex claude grok cursor gemini opencode continue)
+ALL_AGENTS=(codex claude grok cursor gemini agy opencode continue)
 
 agent_label() {
   case "$1" in
@@ -35,6 +35,7 @@ agent_label() {
     grok) echo "Grok Build" ;;
     cursor) echo "Cursor" ;;
     gemini) echo "Gemini CLI" ;;
+    agy) echo "Antigravity CLI" ;;
     opencode) echo "OpenCode" ;;
     continue) echo "Continue" ;;
     *) echo "unknown" ;;
@@ -60,7 +61,7 @@ agent_paths() {
         "${HOME}/.cursor/AGENTS.md" \
         "${HOME}/.cursor/rules/AGENTS.mdc"
       ;;
-    gemini)
+    agy|gemini)
       printf '%s\n' "${HOME}/.gemini/GEMINI.md"
       ;;
     opencode)
@@ -143,6 +144,7 @@ Shared AGENTS.md for multiple coding agents. Canonical file:
   ${SOURCE_REAL}
 
 Commands:
+  install-skills  Symlink bundled skills into agent global paths
   install     Symlink AGENTS.md into agent global paths
   uninstall   Remove symlinks that point at this repo
   status      Show install status for each agent
@@ -583,6 +585,110 @@ select_agents_from_args() {
   SELECTED_AGENTS=()
 }
 
+
+# One native discovery root per agent; never link the entire skills directory.
+agent_skills_path() {
+  case "$1" in
+    codex) printf '%s\n' "${HOME}/.agents/skills" ;;
+    claude) printf '%s\n' "${HOME}/.claude/skills" ;;
+    grok) printf '%s\n' "${HOME}/.grok/skills" ;;
+    cursor) printf '%s\n' "${HOME}/.cursor/skills" ;;
+    gemini) printf '%s\n' "${HOME}/.gemini/skills" ;;
+    agy) printf '%s\n' "${HOME}/.gemini/antigravity-cli/skills" ;;
+    opencode) printf '%s\n' "${XDG_CONFIG_HOME:-${HOME}/.config}/opencode/skills" ;;
+    *) return 1 ;;
+  esac
+}
+
+usage_install_skills() {
+  cat <<'EOF'
+Usage: ho-rules install-skills [agents...] [options]
+
+Symlink every bundled skills/<name>/SKILL.md folder into selected global roots.
+Defaults to all supported agents (Continue has no verified skills root).
+
+  --all                 All supported skills targets
+  -a, --agent <ids>      Comma-separated agent ids (repeatable)
+  --force               Back up conflicts outside discovery roots, then replace
+  --dry-run             Print actions without writing
+  -h, --help            Show help
+
+Existing matching links are skipped. Conflicts are preserved unless --force;
+any preserved conflict makes the command exit nonzero. Only bundled skills
+are managed. Start a new agent session after installation.
+EOF
+}
+
+cmd_install_skills() {
+  local targets=() raw=() token part a root src name dest backup
+  local force=0 dry=0 all=0 conflicts=0 found=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --force) force=1; shift ;;
+      --dry-run) dry=1; shift ;;
+      --all) all=1; shift ;;
+      -h|--help) usage_install_skills; return 0 ;;
+      -a|--agent)
+        [[ $# -ge 2 && -n "$2" ]] || die "$1 requires a value"
+        raw+=("$2"); shift 2 ;;
+      --agent=*) raw+=("${1#--agent=}"); shift ;;
+      -*) die "unknown option: $1" ;;
+      *) raw+=("$1"); shift ;;
+    esac
+  done
+  if [[ "$all" -eq 1 || ${#raw[@]} -eq 0 ]]; then
+    targets=(codex claude grok cursor gemini agy opencode)
+  else
+    for token in "${raw[@]}"; do
+      IFS=',' read -ra parts <<<"$token"
+      for part in "${parts[@]}"; do
+        agent_skills_path "$part" >/dev/null || die "unsupported skills target: $part"
+        targets+=("$part")
+      done
+    done
+    [[ ${#targets[@]} -gt 0 ]] || die "no agents selected"
+  fi
+  for a in "${targets[@]}"; do
+    root="$(agent_skills_path "$a")"
+    log "==> $(agent_label "$a") skills: $root"
+    for src in "$REPO_ROOT"/skills/*; do
+      [[ -f "$src/SKILL.md" ]] || continue
+      found=1
+      name="$(basename "$src")"
+      dest="$root/$name"
+      if [[ -L "$dest" && "$(resolve_link_target "$dest")" == "$src" ]]; then
+        log "  already linked: $dest"
+        continue
+      fi
+      if [[ -e "$dest" || -L "$dest" ]]; then
+        if [[ "$force" -eq 0 ]]; then
+          log "  conflict (preserved): $dest; use --force to back up and replace"
+          conflicts=1
+          continue
+        fi
+        if [[ "$dry" -eq 1 ]]; then
+          log "  DRY-RUN: back up $dest under ~/.local/state/ho-rules/backups/"
+        else
+          backup="${HOME}/.local/state/ho-rules/backups"
+          mkdir -p "$backup"
+          backup="$(mktemp -d "$backup/skills-${a}-${name}.XXXXXXXX")"
+          mv "$dest" "$backup/$name"
+          log "  backup: $backup/$name"
+        fi
+      fi
+      if [[ "$dry" -eq 1 ]]; then
+        log "  DRY-RUN: link $dest -> $src"
+      else
+        mkdir -p "$root"
+        ln -s "$src" "$dest"
+        log "  linked: $dest -> $src"
+      fi
+    done
+  done
+  [[ "$found" -eq 1 ]] || die "no bundled skills found"
+  [[ "$conflicts" -eq 0 ]]
+}
+
 cmd_install() {
   require_source
   MODE="symlink"
@@ -887,6 +993,7 @@ cmd_help() {
     return 0
   fi
   case "$1" in
+    install-skills) usage_install_skills ;;
     install) usage_install ;;
     uninstall) usage_uninstall ;;
     publish) usage_publish ;;
@@ -910,6 +1017,7 @@ main() {
   shift
 
   case "$cmd" in
+    install-skills) cmd_install_skills "$@" ;;
     install) cmd_install "$@" ;;
     uninstall) cmd_uninstall "$@" ;;
     status) cmd_status "$@" ;;

@@ -171,7 +171,73 @@ ho-rules publish -m "..." --no-pr    # 只推 branch
 | `grok` | `~/.grok/rules/AGENTS.md` |
 | `cursor` | `~/.cursor/AGENTS.md`, `~/.cursor/rules/AGENTS.mdc` |
 | `gemini` | `~/.gemini/GEMINI.md` |
+| `agy` | `~/.gemini/GEMINI.md` (shared with Gemini CLI) |
 | `opencode` | `~/.config/opencode/AGENTS.md` |
 | `continue` | `~/.continue/config/AGENTS.md` |
 
 只在本仓库改 `AGENTS.md`，不要在 `~/.codex/...` 等链接路径上直接当“源文件”维护。
+
+
+## 安装仓库自带的 skills
+
+```bash
+ho-rules install-skills agy --dry-run
+ho-rules install-skills agy
+ho-rules install-skills -a codex,claude
+ho-rules install-skills --all
+```
+
+`install` 安装规则；`install-skills` 逐个软链本仓库中包含
+`skills/<名称>/SKILL.md` 的目录，默认选择所有已支持的 skills 目标。
+已正确链接的跳过；同名文件、目录和其他软链默认保留，并返回非零退出码。
+只有指定 `--force` 才会备份后替换，备份放在
+`~/.local/state/ho-rules/backups/`，避免被当成重复 skill 扫描。
+`--dry-run` 不写入文件。安装后启动新的 agent 会话；Agy 中输入
+`/advisor` 可选择该 skill，安装本身不会执行审阅。
+
+已核实的全局 skills 目录（2026-11-12，默认配置）：
+
+| Agent | Skills 目录 |
+| --- | --- |
+| Codex | `~/.agents/skills/` |
+| Claude Code | `~/.claude/skills/` |
+| Grok Build | `~/.grok/skills/` |
+| Cursor | `~/.cursor/skills/` |
+| Gemini CLI | `~/.gemini/skills/` |
+| Agy CLI | `~/.gemini/antigravity-cli/skills/` |
+| OpenCode | `${XDG_CONFIG_HOME:-~/.config}/opencode/skills/` |
+| Continue | 暂不支持：未核实到全局 skills 目录 |
+
+这些是本地发现目录，不能据此推断远程或云端 agent 也能访问；agent 配置也可能禁用
+skills。本机 Codex 还会发现旧的 `~/.codex/skills/`；如果版本会显示同名项，避免在
+两个目录重复安装。本命令保留已有的旧目录安装。
+
+### 规则路径核查
+
+上面的规则软链表早于本轮核查。已确认的原生全局入口包括 Codex 的
+`~/.codex/AGENTS.md`（或配置的 Codex home；`AGENTS.override.md` 优先）、
+Claude 的 `~/.claude/CLAUDE.md`、Gemini 与 Agy 共用的 `~/.gemini/GEMINI.md`，
+以及 OpenCode 的 `~/.config/opencode/AGENTS.md`。
+Grok 文档描述了 `~/.grok/` 下的全局规则及项目 `.grok/rules/*.md`；本轮保留旧链接，
+可用 `grok inspect` 核对实际加载路径。
+Cursor 官方文档描述项目 `AGENTS.md`、`.cursor/rules/*.mdc` 和设置中的 User Rules，
+旧的 `~/.cursor/` 软链不能证明全局加载。Continue 官方文档描述项目
+`.continue/rules/`，旧的 `~/.continue/config/AGENTS.md` 未核实为当前全局入口。
+`status` 检查的是链接状态，不代表 agent 已将内容注入上下文。
+
+官方来源： [Codex skills](https://developers.openai.com/codex/skills/),
+[Codex rules](https://developers.openai.com/codex/guides/agents-md/),
+[Claude skills](https://code.claude.com/docs/en/skills),
+[Claude memory](https://code.claude.com/docs/en/memory),
+[Grok skills](https://docs.x.ai/build/features/skills-plugins-marketplaces),
+[Grok rules](https://docs.x.ai/build/features/project-rules),
+[Cursor skills](https://cursor.com/docs/skills),
+[Cursor rules](https://cursor.com/docs/rules),
+[Gemini skills](https://geminicli.com/docs/cli/using-agent-skills/),
+[Agy rules](https://antigravity.google/docs/rules/),
+[Agy skills](https://www.agy.dev/docs/skills/),
+[OpenCode skills](https://opencode.ai/docs/skills/),
+[OpenCode rules](https://opencode.ai/docs/rules/),
+[Continue rules](https://docs.continue.dev/customize/rules).
+
+验证：`bash -n ho-rules` 和 `python3 -m unittest discover -s tests -v`.

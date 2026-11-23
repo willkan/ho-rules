@@ -166,7 +166,77 @@ Requires `origin` remote and authenticated `gh` when creating a PR.
 | `grok` | `~/.grok/rules/AGENTS.md` |
 | `cursor` | `~/.cursor/AGENTS.md`, `~/.cursor/rules/AGENTS.mdc` |
 | `gemini` | `~/.gemini/GEMINI.md` |
+| `agy` | `~/.gemini/GEMINI.md` (shared with Gemini CLI) |
 | `opencode` | `~/.config/opencode/AGENTS.md` |
 | `continue` | `~/.continue/config/AGENTS.md` |
 
 Edit only this repo’s `AGENTS.md`. Do not treat `~/.codex/...` (and similar) link targets as the source of truth.
+
+
+## Bundled skills
+
+```bash
+ho-rules install-skills agy --dry-run
+ho-rules install-skills agy
+ho-rules install-skills -a codex,claude
+ho-rules install-skills --all
+```
+
+`install` installs rules; `install-skills` links each folder containing
+`skills/<name>/SKILL.md` from this repository. It defaults to all supported
+skills targets. Matching links are skipped. Existing conflicting files,
+directories and links are preserved and produce a nonzero exit status.
+`--force` backs them up under `~/.local/state/ho-rules/backups/` before replacing
+them; backups stay outside skill discovery directories. `--dry-run` writes nothing.
+Start a new agent session to discover newly installed skills. For Agy, type
+`/advisor` to select the advisor skill; installation does not invoke a review.
+
+Verified global skills roots (2026-11-12; default profiles):
+
+| Agent | Skills root |
+| --- | --- |
+| Codex | `~/.agents/skills/` |
+| Claude Code | `~/.claude/skills/` |
+| Grok Build | `~/.grok/skills/` |
+| Cursor | `~/.cursor/skills/` |
+| Gemini CLI | `~/.gemini/skills/` |
+| Agy CLI | `~/.gemini/antigravity-cli/skills/` |
+| OpenCode | `${XDG_CONFIG_HOME:-~/.config}/opencode/skills/` |
+| Continue | Not supported by this installer: no verified global skills root |
+
+These are local discovery roots, not a guarantee that remote/cloud agents share
+local files. Agent settings may disable skills. Codex currently also discovers
+legacy `~/.codex/skills/` locally; avoid installing the same skill in both roots
+if your version shows duplicate entries. This command leaves existing legacy
+installations untouched.
+
+### Rules path audit
+
+The rule links above predate this audit. Confirmed native global entries include
+Codex `~/.codex/AGENTS.md` (or its configured Codex home; an `AGENTS.override.md`
+takes precedence), Claude `~/.claude/CLAUDE.md`, Gemini and Agy
+`~/.gemini/GEMINI.md`, and OpenCode `~/.config/opencode/AGENTS.md`.
+Grok documents global rules under `~/.grok/` and project `.grok/rules/*.md`.
+The existing Grok link is retained; verify discovered files with `grok inspect`.
+Cursor documents project `AGENTS.md`/`.cursor/rules/*.mdc` and User Rules in
+settings; the legacy `~/.cursor/` links above are not proof of global loading.
+Continue documents project `.continue/rules/`; the legacy
+`~/.continue/config/AGENTS.md` link is not a verified current global entry.
+`status` checks link state, not whether an agent injected it into its prompt.
+
+Sources: [Codex skills](https://developers.openai.com/codex/skills/),
+[Codex rules](https://developers.openai.com/codex/guides/agents-md/),
+[Claude skills](https://code.claude.com/docs/en/skills),
+[Claude memory](https://code.claude.com/docs/en/memory),
+[Grok skills](https://docs.x.ai/build/features/skills-plugins-marketplaces),
+[Grok rules](https://docs.x.ai/build/features/project-rules),
+[Cursor skills](https://cursor.com/docs/skills),
+[Cursor rules](https://cursor.com/docs/rules),
+[Gemini skills](https://geminicli.com/docs/cli/using-agent-skills/),
+[Agy rules](https://antigravity.google/docs/rules/),
+[Agy skills](https://www.agy.dev/docs/skills/),
+[OpenCode skills](https://opencode.ai/docs/skills/),
+[OpenCode rules](https://opencode.ai/docs/rules/),
+[Continue rules](https://docs.continue.dev/customize/rules).
+
+Validation: `bash -n ho-rules` and `python3 -m unittest discover -s tests -v`.
