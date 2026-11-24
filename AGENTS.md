@@ -20,6 +20,7 @@
 | 老大难问题、反复修补仍不收敛、同类问题跨入口复发：重新归因并比较整体方案 | `astra`（最新） / xhigh | `gemini-4-carbon-xhigh`（无则取最高可用预算） | `fable` / medium |
 | 复杂实现、跨文件修复、端到端执行 | `sol`（最新） / medium | `gemini-4-neon-high` | `opus` / medium |
 | 范围清楚的局部修复、UI/浏览器操作、验证 | `terra`（最新） / medium | `gemini-4-neon-medium` | `sonnet` / medium |
+| 视觉签收、页面截图评审 | `terra`（最新） / medium | `gemini-4-hydrogen-medium` | `sonnet` / medium |
 | 明确规则下的检索、提取、批量转换、机械修改 | `luna`（最新） / max | `gemini-4-hydrogen-low` | `haiku` / low |
 
 按当前工具实际可用模型目录选型；`gemini-4-carbon` 不可用时不猜测 ID，由主 agent 处理或选用已确认相当的可用模型，不为匹配表格自动启动其他 CLI。
